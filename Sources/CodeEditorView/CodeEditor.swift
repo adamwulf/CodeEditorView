@@ -357,6 +357,16 @@ extension EnvironmentValues {
 }
 
 
+// MARK: Custom highlighter
+
+extension EnvironmentValues {
+
+  /// Custom highlighter for app-specific syntax highlighting.
+  /// When set, replaces the default token-based highlighting.
+  @Entry public var codeEditorCustomHighlighter: CustomHighlighter? = nil
+}
+
+
 // MARK: Code actions
 
 extension CodeEditor {
@@ -614,6 +624,7 @@ extension CodeEditor: UIViewRepresentable {
     if theme.id != codeView.theme.id { codeView.theme = theme }
     if definitiveLayout != codeView.viewLayout { codeView.viewLayout = definitiveLayout }
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
+    codeView.customHighlighter = context.environment.codeEditorCustomHighlighter
     // Equality on language configurations implies the same name and the same language service.
     if language != codeView.language {
       codeView.language                 = language
@@ -822,6 +833,7 @@ extension CodeEditor: NSViewRepresentable {
     if theme.id != codeView.theme.id { codeView.theme = theme }
     if definitiveLayout != codeView.viewLayout { codeView.viewLayout = definitiveLayout }
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
+    codeView.customHighlighter = context.environment.codeEditorCustomHighlighter
     // Equality on language configurations implies the same name and the same language service.
     if language != codeView.language {
 

@@ -128,6 +128,13 @@ final class CodeView: UITextView {
   ///
   var indentation: CodeEditor.IndentationConfiguration = .standard
 
+  /// Custom highlighter for app-specific syntax highlighting.
+  /// When set, replaces the default token-based highlighting.
+  public var customHighlighter: CustomHighlighter? {
+    get { optCodeStorage?.customHighlighter }
+    set { optCodeStorage?.customHighlighter = newValue }
+  }
+
   /// Hook to propagate message sets upwards in the view hierarchy.
   ///
   let setMessages: (Set<TextLocated<Message>>) -> Void
@@ -142,7 +149,7 @@ final class CodeView: UITextView {
 
   /// Designated initializer for code views with a gutter.
   ///
-  init(frame: CGRect, 
+  init(frame: CGRect,
        with language: LanguageConfiguration,
        viewLayout: CodeEditor.LayoutConfiguration,
        indentation: CodeEditor.IndentationConfiguration,
@@ -460,6 +467,13 @@ final class CodeView: NSTextView {
   /// The current indentation configuration.
   ///
   var indentation: CodeEditor.IndentationConfiguration = .standard
+
+  /// Custom highlighter for app-specific syntax highlighting.
+  /// When set, replaces the default token-based highlighting.
+  public var customHighlighter: CustomHighlighter? {
+    get { optCodeStorage?.customHighlighter }
+    set { optCodeStorage?.customHighlighter = newValue }
+  }
 
   /// Hook to propagate message sets upwards in the view hierarchy.
   ///

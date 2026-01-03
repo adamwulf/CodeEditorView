@@ -25,12 +25,24 @@ typealias EditActions = NSTextStorageEditActions
 // MARK: -
 // MARK: `NSTextStorage` subclass
 
+/// Custom highlighter closure type for app-specific syntax highlighting.
+/// When set, this replaces the default token-based highlighting.
+/// - Parameters:
+///   - text: The full text content of the document.
+///   - range: The range to highlight (typically the visible range being rendered).
+///   - layoutManager: The layout manager on which to set rendering attributes.
+public typealias CustomHighlighter = (_ text: String, _ range: NSRange, _ layoutManager: NSTextLayoutManager) -> Void
+
 // `NSTextStorage` is a class cluster; hence, we realise our subclass by decorating an embeded vanilla text storage.
 class CodeStorage: NSTextStorage {
 
   fileprivate let textStorage: NSTextStorage = NSTextStorage()
 
   var theme: Theme
+
+  /// Custom highlighter closure for app-specific syntax highlighting.
+  /// When set, this replaces the default token-based highlighting.
+  public var customHighlighter: CustomHighlighter?
   
 
   // MARK: Initialisers
@@ -162,17 +174,24 @@ extension CodeStorage {
       guard let contentStorage = layoutManager.textContentManager as? NSTextContentStorage
       else { return }
 
+      // Always apply default text color as base
       if let textRange = contentStorage.textRange(for: range) {
         layoutManager.setRenderingAttributes([.foregroundColor: theme.textColour, .hideInvisibles: ()],
                                              for: textRange)
       }
-      enumerateTokens(in: range) { lineToken in
 
-        if let documentRange = lineToken.range.intersection(range),
-           let textRange     = contentStorage.textRange(for: documentRange)
-        {
-          let colour = colour(for: lineToken)
-          layoutManager.setRenderingAttributes([.foregroundColor: colour], for: textRange)
+      // Use custom highlighter if provided, otherwise use token-based highlighting
+      if let customHighlighter {
+        customHighlighter(string, range, layoutManager)
+      } else {
+        enumerateTokens(in: range) { lineToken in
+
+          if let documentRange = lineToken.range.intersection(range),
+             let textRange     = contentStorage.textRange(for: documentRange)
+          {
+            let colour = colour(for: lineToken)
+            layoutManager.setRenderingAttributes([.foregroundColor: colour], for: textRange)
+          }
         }
       }
   }
