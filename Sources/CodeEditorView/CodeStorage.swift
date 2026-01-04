@@ -38,7 +38,12 @@ class CodeStorage: NSTextStorage {
 
   fileprivate let textStorage: NSTextStorage = NSTextStorage()
 
-  var theme: Theme
+  var theme: Theme {
+    didSet {
+      // Rebuild cached attributes when theme changes
+      defaultHighlightingAttrs = [.foregroundColor: theme.textColour, .hideInvisibles: ()]
+    }
+  }
 
   /// Custom highlighter closure for app-specific syntax highlighting.
   /// When set, this replaces the default token-based highlighting.
@@ -47,12 +52,16 @@ class CodeStorage: NSTextStorage {
   /// Counter incremented on each edit, used for efficient cache invalidation.
   /// Highlighters can compare this against a cached value instead of computing expensive text hashes.
   public private(set) var editGeneration: UInt64 = 0
+
+  /// Pre-computed default highlighting attributes (avoids dictionary allocation per highlight call).
+  private var defaultHighlightingAttrs: [NSAttributedString.Key: Any]
   
 
   // MARK: Initialisers
 
   init(theme: Theme) {
     self.theme = theme
+    self.defaultHighlightingAttrs = [.foregroundColor: theme.textColour, .hideInvisibles: ()]
     super.init()
   }
 
@@ -179,10 +188,9 @@ extension CodeStorage {
       guard let contentStorage = layoutManager.textContentManager as? NSTextContentStorage
       else { return }
 
-      // Always apply default text color as base
+      // Always apply default text color as base (uses cached dictionary to avoid allocation)
       if let textRange = contentStorage.textRange(for: range) {
-        layoutManager.setRenderingAttributes([.foregroundColor: theme.textColour, .hideInvisibles: ()],
-                                             for: textRange)
+        layoutManager.setRenderingAttributes(defaultHighlightingAttrs, for: textRange)
       }
 
       // Use custom highlighter if provided, otherwise use token-based highlighting
