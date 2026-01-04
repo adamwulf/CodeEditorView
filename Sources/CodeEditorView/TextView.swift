@@ -94,7 +94,7 @@ extension TextView {
     guard let textLayoutManager  = optTextLayoutManager,
           let textContentStorage = textLayoutManager.textContentManager as? NSTextContentStorage,
           let lineMap           = (optCodeStorage?.delegate as? CodeStorageDelegate)?.lineMap,
-          lineMap.lines.count > 1   // this ensure that the line map has been initialised
+          lineMap.lineInfos.count > 1   // this ensure that the line map has been initialised
     else { return nil }
 
     if let textRange = textLayoutManager.textViewportLayoutController.viewportRange {

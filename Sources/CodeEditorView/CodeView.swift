@@ -1469,7 +1469,7 @@ extension CodeView {
     var messageIds: [LineInfo.MessageBundle.ID] = []
 
     // Remove all message bundles in the line map and collect their ids for subsequent view removal.
-    for line in lines ?? codeStorageDelegate.lineMap.lines.indices {
+    for line in lines ?? 0..<codeStorageDelegate.lineMap.lineInfos.count {
 
       if let messageBundle = codeStorageDelegate.messages(at: line) {
 

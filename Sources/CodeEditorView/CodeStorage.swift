@@ -399,20 +399,21 @@ extension CodeStorage {
           let startLine = lineMap.lineContaining(index: location)
     else { return }
 
-    let firstLine = lineMap.lines[startLine]
-    if let info = firstLine.info {
+    let firstLine = lineMap.lookup(line: startLine)
+    if let info = firstLine?.info {
 
       let doContinue = enumerate(tokens: info.tokens,
                                  commentRanges: info.commentRanges,
-                                 lineStart: firstLine.range.location,
-                                 startLocation: location - firstLine.range.location)
+                                 lineStart: firstLine!.range.location,
+                                 startLocation: location - firstLine!.range.location)
       if !doContinue { return }
 
     }
 
-    for line in lineMap.lines[startLine + 1 ..< lineMap.lines.count] {
+    for lineNr in startLine + 1 ..< lineMap.lineInfos.count {
 
-      if let info = line.info {
+      if let line = lineMap.lookup(line: lineNr),
+         let info = line.info {
 
         let doContinue = enumerate(tokens: info.tokens,
                                    commentRanges: info.commentRanges,

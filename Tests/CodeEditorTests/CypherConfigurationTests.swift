@@ -28,7 +28,7 @@ struct CypherNumberTokenisingTests {
     codeStorage.setAttributedString(attributedString)  // triggers tokenisation
     let lineMap = codeStorageDelegate.lineMap
     
-    #expect(lineMap.lines.count == 1)
+    #expect(lineMap.lineInfos.count == 1)
 
     let tokens = try #require(lineMap.lookup(line: 0)?.info?.tokens, "A token should be found")
     #expect(tokens.count == 1, "A single token should be found")
@@ -70,7 +70,7 @@ struct CypherIdentifierTokenisingTests {
     codeStorage.setAttributedString(attributedStringValue)  // triggers tokenisation
     let lineMap = codeStorageDelegate.lineMap
     
-    #expect(lineMap.lines.count == 1)
+    #expect(lineMap.lineInfos.count == 1)
     
     let tokens = try #require(lineMap.lookup(line: 0)?.info?.tokens, "A token should be found")
     #expect(tokens.count == 1, "A single token should be found")
@@ -88,7 +88,7 @@ struct CypherIdentifierTokenisingTests {
     codeStorage.setAttributedString(attributedStringValue)  // triggers tokenisation
     let lineMap = codeStorageDelegate.lineMap
     
-    #expect(lineMap.lines.count == 1)
+    #expect(lineMap.lineInfos.count == 1)
     
     let tokens = try #require(lineMap.lookup(line: 0)?.info?.tokens, "Tokens should be found")
     #expect(tokens.count > 1, "Multiple tokens should be found if it's not a single valid identifier.")
@@ -132,7 +132,7 @@ struct CypherStringTokenisingTests {
     codeStorage.setAttributedString(attributedStringValue)  // triggers tokenisation
     let lineMap = codeStorageDelegate.lineMap
     
-    #expect(lineMap.lines.count == 1)
+    #expect(lineMap.lineInfos.count == 1)
     
     let tokens = try #require(lineMap.lookup(line: 0)?.info?.tokens, "A token should be found")
     #expect(tokens.count == 1, "A single token should be found")

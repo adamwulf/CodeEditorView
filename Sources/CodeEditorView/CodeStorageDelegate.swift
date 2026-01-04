@@ -638,7 +638,7 @@ extension CodeStorageDelegate {
     var currentLine       = lines.endIndex
     var highlightingRange = range
     var highlightingLines = lines.count
-    trailingLineLoop: while currentLine < lineMap.lines.count {
+    trailingLineLoop: while currentLine < lineMap.lineInfos.count {
 
       if let lineEntry      = lineMap.lookup(line: currentLine),
          let lineEntryRange = Range<String.Index>(lineEntry.range, in: textStorage.string)
@@ -921,12 +921,12 @@ extension CodeStorageDelegate {
   ///
   func remove(message: Message) -> (LineInfo.MessageBundle, Int)? {
 
-    for line in lineMap.lines.indices {
-      if var info = lineMap.lines[line].info {
+    for lineNr in 0..<lineMap.lineInfos.count {
+      if var info = lineMap.lookup(line: lineNr)?.info {
 
         info.messages?.remove(message: message)
-        lineMap.setInfoOf(line: line, to: info)
-        if let messages = info.messages { return (messages, line) } else { return nil }
+        lineMap.setInfoOf(line: lineNr, to: info)
+        if let messages = info.messages { return (messages, lineNr) } else { return nil }
 
       }
     }

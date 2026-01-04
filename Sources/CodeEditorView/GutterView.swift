@@ -277,7 +277,8 @@ extension GutterView {
 
       for line in lineRange {  // NB: These are zero-based line numbers
 
-        guard let lineStartLocation  = textContentStorage.textLocation(for: lineMap.lines[line].range.location),
+        guard let lineInfo = lineMap.lookup(line: line),
+              let lineStartLocation  = textContentStorage.textLocation(for: lineInfo.range.location),
               let textLayoutFragment = textLayoutManager.textLayoutFragment(for: lineStartLocation)
         else { continue }
 
@@ -290,7 +291,7 @@ extension GutterView {
       }
 
       // If we are at the end, we also draw a line number for the extra line fragement if that exists
-      if lineRange.endIndex == lineMap.lines.count,
+      if lineRange.endIndex == lineMap.lineInfos.count,
          let endLocation        = textContentStorage.location(textRange.endLocation, offsetBy: -1),
          let textLayoutFragment = textLayoutManager.textLayoutFragment(for: endLocation),
          let textRect           = textLayoutFragment.layoutFragmentFrameExtraLineFragment
@@ -300,7 +301,7 @@ extension GutterView {
             attributes = selectedLines.contains(lineRange.endIndex - 1)
                          ? cache.textAttributesSelected : cache.textAttributesDefault
         if gutterRect.intersects(rect) {
-          lineNumberString(for: lineMap.lines.count).draw(in: gutterRect, withAttributes: attributes)
+          lineNumberString(for: lineMap.lineInfos.count).draw(in: gutterRect, withAttributes: attributes)
         }
 
       } else if textRange.isEmpty {  // Empty document (i.e., there is no layout fragment)

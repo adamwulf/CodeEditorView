@@ -33,7 +33,7 @@ let str = "xyz"
     codeStorage.setAttributedString(NSAttributedString(string: code))  // this triggers tokenisation
 
     let lineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lineMap.lines.count, 2)    // code starts at line 0
+    XCTAssertEqual(lineMap.lineInfos.count, 2)    // code starts at line 0
 
     // Line 1
     XCTAssertEqual(lineMap.lookup(line: 0)?.info?.tokens,
@@ -64,7 +64,7 @@ let str = "xyz"
     codeStorage.setAttributedString(NSAttributedString(string: code))  // this triggers tokenisation
 
     let lineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lineMap.lines.count, 2)    // code starts at line 1
+    XCTAssertEqual(lineMap.lineInfos.count, 2)    // code starts at line 1
 
     // Line 1
     XCTAssertEqual(lineMap.lookup(line: 0)?.info?.tokens,
@@ -92,7 +92,7 @@ let str = "xyz"\n
     codeStorage.setAttributedString(NSAttributedString(string: code))  // this triggers tokenisation
 
     let lineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lineMap.lines.count, 3)    // code starts at line 1
+    XCTAssertEqual(lineMap.lineInfos.count, 3)    // code starts at line 1
 
     // Line 3
     XCTAssertEqual(lineMap.lookup(line: 2)?.info?.tokens, [])
@@ -112,7 +112,7 @@ test
     codeStorage.setAttributedString(NSAttributedString(string: code))  // this triggers tokenisation
 
     let lineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lineMap.lines.count, 2)    // code starts at line 1
+    XCTAssertEqual(lineMap.lineInfos.count, 2)    // code starts at line 1
 
     // Line 1
     XCTAssertEqual(lineMap.lookup(line: 0)?.info?.tokens,
@@ -142,7 +142,7 @@ test
     codeStorage.setAttributedString(NSAttributedString(string: code))  // this triggers tokenisation
 
     let lineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lineMap.lines.count, 3)    // code starts at line 1
+    XCTAssertEqual(lineMap.lineInfos.count, 3)    // code starts at line 1
 
     // Line 1
     XCTAssertEqual(lineMap.lookup(line: 0)?.info?.tokens,
@@ -179,7 +179,7 @@ test
     codeStorage.setAttributedString(NSAttributedString(string: code))  // this triggers tokenisation
 
     let lineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lineMap.lines.count, 2)    // code starts at line 1
+    XCTAssertEqual(lineMap.lineInfos.count, 2)    // code starts at line 1
 
     // Line 1
     XCTAssertEqual(lineMap.lookup(line: 0)?.info?.tokens,
@@ -208,7 +208,7 @@ test */
     codeStorage.setAttributedString(NSAttributedString(string: code))  // this triggers tokenisation
 
     let lineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lineMap.lines.count, 2)    // code starts at line 1
+    XCTAssertEqual(lineMap.lineInfos.count, 2)    // code starts at line 1
 
     // Line 1
     XCTAssertEqual(lineMap.lookup(line: 0)?.info?.tokens,
@@ -234,7 +234,7 @@ test */
     codeStorage.setAttributedString(NSAttributedString(string: lowerCaseCode))  // this triggers tokenisation
     
     let lowerCaseLineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lowerCaseLineMap.lines.count, 1)    // code starts at line 1
+    XCTAssertEqual(lowerCaseLineMap.lineInfos.count, 1)    // code starts at line 1
     XCTAssertEqual(lowerCaseLineMap.lookup(line: 0)?.info?.tokens,
                    [ Tokeniser.Token(token: .keyword, range: NSRange(location: 0, length: 6))
                    , Tokeniser.Token(token: .identifier(.none), range: NSRange(location: 7, length: 8))
@@ -245,7 +245,7 @@ test */
     codeStorage.setAttributedString(NSAttributedString(string: upperCaseCode))  // this triggers tokenisation
     
     let upperCaseLineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(upperCaseLineMap.lines.count, 1)    // code starts at line 1
+    XCTAssertEqual(upperCaseLineMap.lineInfos.count, 1)    // code starts at line 1
     XCTAssertEqual(upperCaseLineMap.lookup(line: 0)?.info?.tokens,
                    [ Tokeniser.Token(token: .identifier(.none), range: NSRange(location: 0, length: 6))
                    , Tokeniser.Token(token: .identifier(.none), range: NSRange(location: 7, length: 8))
@@ -262,7 +262,7 @@ test */
     codeStorage.setAttributedString(NSAttributedString(string: lowerCaseCode))  // this triggers tokenisation
     
     let lowerCaseLineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lowerCaseLineMap.lines.count, 1)    // code starts at line 1
+    XCTAssertEqual(lowerCaseLineMap.lineInfos.count, 1)    // code starts at line 1
     XCTAssertEqual(lowerCaseLineMap.lookup(line: 0)?.info?.tokens,
                    [ Tokeniser.Token(token: .keyword, range: NSRange(location: 0, length: 6))
                    , Tokeniser.Token(token: .identifier(.none), range: NSRange(location: 7, length: 8))
@@ -273,7 +273,7 @@ test */
     codeStorage.setAttributedString(NSAttributedString(string: upperCaseCode))  // this triggers tokenisation
     
     let upperCaseLineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(upperCaseLineMap.lines.count, 1)    // code starts at line 1
+    XCTAssertEqual(upperCaseLineMap.lineInfos.count, 1)    // code starts at line 1
     XCTAssertEqual(upperCaseLineMap.lookup(line: 0)?.info?.tokens,
                    [ Tokeniser.Token(token: .identifier(.none), range: NSRange(location: 0, length: 6))
                    , Tokeniser.Token(token: .identifier(.none), range: NSRange(location: 7, length: 8))
@@ -290,7 +290,7 @@ test */
     codeStorage.setAttributedString(NSAttributedString(string: code))  // this triggers tokenisation
     
     let lineMap = codeStorageDelegate.lineMap
-    XCTAssertEqual(lineMap.lines.count, 1)    // code starts at line 1
+    XCTAssertEqual(lineMap.lineInfos.count, 1)    // code starts at line 1
     XCTAssertEqual(lineMap.lookup(line: 0)?.info?.tokens,
                    [ Tokeniser.Token(token: .keyword, range: NSRange(location: 0, length: 6))
                    , Tokeniser.Token(token: .identifier(.none), range: NSRange(location: 7, length: 8))

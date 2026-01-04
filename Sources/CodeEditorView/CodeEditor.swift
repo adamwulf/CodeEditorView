@@ -503,7 +503,7 @@ extension CodeEditor {
             self = .insertionPoint(line + 1, range.location - oneLine.range.location + 1)
           } else {
 
-            let lastLine = lineMap.lineOf(index: range.upperBound) ?? lineMap.lines.count
+            let lastLine = lineMap.lineOf(index: range.upperBound) ?? lineMap.lineInfos.count
             if line == lastLine {
               self = .characters(range.length)
             } else {
