@@ -129,10 +129,20 @@ final class CodeView: UITextView {
   var indentation: CodeEditor.IndentationConfiguration = .standard
 
   /// Custom highlighter for app-specific syntax highlighting.
-  /// When set, replaces the default token-based highlighting.
+  /// When set, replaces the default token-based highlighting and triggers re-rendering.
   public var customHighlighter: CustomHighlighter? {
     get { optCodeStorage?.customHighlighter }
-    set { optCodeStorage?.customHighlighter = newValue }
+    set {
+      let wasNil = optCodeStorage?.customHighlighter == nil
+      optCodeStorage?.customHighlighter = newValue
+      // Trigger re-highlighting when highlighter is first set (nil → closure)
+      // This ensures highlighting works on app startup when the highlighter
+      // is set after the initial layout pass.
+      if wasNil && newValue != nil,
+         let textLayoutManager = textLayoutManager {
+        textLayoutManager.redisplayRenderingAttributes(for: textLayoutManager.documentRange)
+      }
+    }
   }
 
   /// Hook to propagate message sets upwards in the view hierarchy.
@@ -510,10 +520,20 @@ final class CodeView: NSTextView {
   var indentation: CodeEditor.IndentationConfiguration = .standard
 
   /// Custom highlighter for app-specific syntax highlighting.
-  /// When set, replaces the default token-based highlighting.
+  /// When set, replaces the default token-based highlighting and triggers re-rendering.
   public var customHighlighter: CustomHighlighter? {
     get { optCodeStorage?.customHighlighter }
-    set { optCodeStorage?.customHighlighter = newValue }
+    set {
+      let wasNil = optCodeStorage?.customHighlighter == nil
+      optCodeStorage?.customHighlighter = newValue
+      // Trigger re-highlighting when highlighter is first set (nil → closure)
+      // This ensures highlighting works on app startup when the highlighter
+      // is set after the initial layout pass.
+      if wasNil && newValue != nil,
+         let textLayoutManager = textLayoutManager {
+        textLayoutManager.redisplayRenderingAttributes(for: textLayoutManager.documentRange)
+      }
+    }
   }
 
   /// Hook to propagate message sets upwards in the view hierarchy.
