@@ -714,7 +714,7 @@ extension CodeEditor: NSViewRepresentable {
     let scrollView = NSScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 40))
     scrollView.borderType            = .noBorder
     scrollView.hasVerticalScroller   = definitiveLayout.showScrollbars
-    scrollView.hasHorizontalScroller = !viewLayout.wrapText && definitiveLayout.showScrollbars
+    scrollView.hasHorizontalScroller = !definitiveLayout.wrapText && definitiveLayout.showScrollbars
     scrollView.hasHorizontalRuler  = false
     scrollView.autoresizingMask    = [.width, .height]
 
