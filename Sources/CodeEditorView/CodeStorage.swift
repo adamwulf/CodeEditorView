@@ -43,6 +43,10 @@ class CodeStorage: NSTextStorage {
   /// Custom highlighter closure for app-specific syntax highlighting.
   /// When set, this replaces the default token-based highlighting.
   public var customHighlighter: CustomHighlighter?
+
+  /// Counter incremented on each edit, used for efficient cache invalidation.
+  /// Highlighters can compare this against a cached value instead of computing expensive text hashes.
+  public private(set) var editGeneration: UInt64 = 0
   
 
   // MARK: Initialisers
@@ -82,6 +86,7 @@ class CodeStorage: NSTextStorage {
   override func replaceCharacters(in range: NSRange, with str: String) {
 
     beginEditing()
+    editGeneration &+= 1  // Overflow-safe increment for cache invalidation
 
     // We are deleting one character => check whether it is a one-character bracket and if so also delete its matching
     // bracket if it is directly adjacent
@@ -539,5 +544,17 @@ class CodeContentStorage: NSTextContentStorage {
         }
       }
     }
+  }
+}
+
+// MARK: - Public API for cache invalidation
+
+public extension NSTextContentStorage {
+  /// Returns the edit generation counter for efficient cache invalidation.
+  /// This counter is incremented on each text edit, allowing highlighters to
+  /// check if content changed without computing expensive text hashes.
+  /// Returns nil if the underlying text storage is not a CodeStorage.
+  var editGeneration: UInt64? {
+    (textStorage as? CodeStorage)?.editGeneration
   }
 }
