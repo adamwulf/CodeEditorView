@@ -233,52 +233,7 @@ final class CodeView: UITextView {
     self.currentLineHighlightView = currentLineHighlightView
     addBackgroundSubview(currentLineHighlightView)
 
-    // Create the minimap with its own gutter, but sharing the code storage with the code view
-    //
-    let minimapView        = MinimapView(),
-        minimapGutterView  = GutterView(frame: CGRect.zero,
-                                        textView: minimapView,
-                                        codeStorage: codeStorage,
-                                        theme: theme,
-                                        getMessageViews: { [weak self] in self?.messageViews ?? [:] },
-                                        isMinimapGutter: true),
-        minimapDividerView = UIView()
-    minimapView.codeView = self
-
-    minimapDividerView.backgroundColor = .separator
-    self.minimapDividerView            = minimapDividerView
-    addSubview(minimapDividerView)
-
-    // We register the text layout manager of the minimap view as a secondary layout manager of the code view's text
-    // content storage, so that code view and minimap use the same content.
-    minimapView.textLayoutManager?.replace(textContentStorage)
-    textContentStorage.primaryTextLayoutManager = textLayoutManager
-    minimapView.textLayoutManager?.renderingAttributesValidator = { (minimapLayoutManager, layoutFragment) in
-      guard let textContentStorage = minimapLayoutManager.textContentManager as? NSTextContentStorage else { return }
-      codeStorage.setHighlightingAttributes(for: textContentStorage.range(for: layoutFragment.rangeInElement),
-                                            in: minimapLayoutManager)
-    }
-    minimapView.textLayoutManager?.delegate = minimapTextLayoutManagerDelegate
-
-    minimapView.isScrollEnabled                    = false
-    minimapView.backgroundColor                    = theme.backgroundColour
-    minimapView.tintColor                          = theme.tintColour
-    minimapView.isEditable                         = false
-    minimapView.isSelectable                       = false
-    minimapView.textContainerInset                 = .zero
-    minimapView.textContainer.widthTracksTextView  = false    // we need to be able to control the size (see `tile()`)
-    minimapView.textContainer.heightTracksTextView = true
-    minimapView.textContainer.lineBreakMode        = .byWordWrapping
-    self.minimapView = minimapView
-    addSubview(minimapView)
-
-    minimapView.addSubview(minimapGutterView)
-    self.minimapGutterView = minimapGutterView
-
-    let documentVisibleBox = UIView()
-    documentVisibleBox.backgroundColor = theme.textColour.withAlphaComponent(0.1)
-    minimapView.addSubview(documentVisibleBox)
-    self.documentVisibleBox = documentVisibleBox
+    // Note: Minimap is created lazily in tile() when viewLayout.showMinimap becomes true
 
     // We need to check whether we need to look up completions or cancel a running completion process after every text
     // change.  We also need to invalidate the views of all in the meantime invalidated message views.
@@ -302,9 +257,95 @@ final class CodeView: UITextView {
     if let observer = textDidChangeObserver { NotificationCenter.default.removeObserver(observer) }
   }
 
+  // MARK: - Minimap Lazy Setup/Teardown
+
+  /// Creates the minimap views and registers the minimap's text layout manager.
+  /// Called lazily when `showMinimap` becomes true.
+  private func setupMinimap() {
+    guard minimapView == nil,
+          let codeStorage = textStorage as? CodeStorage,
+          let textContentStorage = textLayoutManager?.textContentManager as? NSTextContentStorage
+    else { return }
+
+    let minimapView        = MinimapView(),
+        minimapGutterView  = GutterView(frame: CGRect.zero,
+                                        textView: minimapView,
+                                        codeStorage: codeStorage,
+                                        theme: theme,
+                                        getMessageViews: { [weak self] in self?.messageViews ?? [:] },
+                                        isMinimapGutter: true),
+        minimapDividerView = UIView()
+    minimapView.codeView = self
+
+    minimapDividerView.backgroundColor = .separator
+    self.minimapDividerView            = minimapDividerView
+    addSubview(minimapDividerView)
+
+    // Register the text layout manager of the minimap view as a secondary layout manager
+    minimapView.textLayoutManager?.replace(textContentStorage)
+    textContentStorage.primaryTextLayoutManager = textLayoutManager
+    minimapView.textLayoutManager?.renderingAttributesValidator = { (minimapLayoutManager, layoutFragment) in
+      guard let textContentStorage = minimapLayoutManager.textContentManager as? NSTextContentStorage else { return }
+      codeStorage.setHighlightingAttributes(for: textContentStorage.range(for: layoutFragment.rangeInElement),
+                                            in: minimapLayoutManager)
+    }
+    minimapView.textLayoutManager?.delegate = minimapTextLayoutManagerDelegate
+
+    minimapView.isScrollEnabled                    = false
+    minimapView.backgroundColor                    = theme.backgroundColour
+    minimapView.tintColor                          = theme.tintColour
+    minimapView.isEditable                         = false
+    minimapView.isSelectable                       = false
+    minimapView.textContainerInset                 = .zero
+    minimapView.textContainer.widthTracksTextView  = false
+    minimapView.textContainer.heightTracksTextView = true
+    minimapView.textContainer.lineBreakMode        = .byWordWrapping
+    self.minimapView = minimapView
+    addSubview(minimapView)
+
+    minimapView.addSubview(minimapGutterView)
+    self.minimapGutterView = minimapGutterView
+
+    let documentVisibleBox = UIView()
+    documentVisibleBox.backgroundColor = theme.textColour.withAlphaComponent(0.1)
+    minimapView.addSubview(documentVisibleBox)
+    self.documentVisibleBox = documentVisibleBox
+  }
+
+  /// Removes the minimap views and unregisters the minimap's text layout manager.
+  /// Called when `showMinimap` becomes false.
+  private func teardownMinimap() {
+    guard let minimapView = minimapView else { return }
+
+    // Remove the minimap's layout manager from the shared text content storage
+    if let minimapLayoutManager = minimapView.textLayoutManager,
+       let textContentStorage = minimapLayoutManager.textContentManager as? NSTextContentStorage {
+      textContentStorage.removeTextLayoutManager(minimapLayoutManager)
+    }
+
+    // Remove views
+    documentVisibleBox?.removeFromSuperview()
+    minimapGutterView?.removeFromSuperview()
+    minimapView.removeFromSuperview()
+    minimapDividerView?.removeFromSuperview()
+
+    // Nil out properties
+    self.documentVisibleBox  = nil
+    self.minimapGutterView   = nil
+    self.minimapView         = nil
+    self.minimapDividerView  = nil
+  }
+
   // NB: Trying to do tiling and minimap adjusting on specific events, instead of here, leads to lots of tricky corner
   //     case.
   override func layoutSubviews() {
+    // Handle lazy minimap setup/teardown based on viewLayout.showMinimap
+    if viewLayout.showMinimap {
+      setupMinimap()  // No-op if already set up
+    } else {
+      teardownMinimap()  // No-op if already torn down
+    }
+
     tile()
     adjustScrollPositionOfMinimap()
     super.layoutSubviews()
@@ -611,71 +652,9 @@ final class CodeView: NSTextView {
     addBackgroundSubview(currentLineHighlightView)
     self.currentLineHighlightView = currentLineHighlightView
 
-    // Create the minimap with its own gutter, but sharing the code storage with the code view
-    //
-    let minimapView        = MinimapView(),
-        minimapGutterView  = GutterView(frame: CGRect.zero,
-                                        textView: minimapView,
-                                        codeStorage: codeStorage,
-                                        theme: theme,
-                                        getMessageViews: { [weak self] in self?.messageViews ?? [:] },
-                                        isMinimapGutter: true),
-        minimapDividerView = NSBox()
-    minimapView.codeView = self
-
-    minimapDividerView.boxType     = .custom
-    minimapDividerView.fillColor   = .separatorColor
-    minimapDividerView.borderWidth = 0
-    self.minimapDividerView = minimapDividerView
-    // NB: The divider view is floating. We cannot add it now, as we don't have an `enclosingScrollView` yet.
-
-    // We register the text layout manager of the minimap view as a secondary layout manager of the code view's text
-    // content storage, so that code view and minimap use the same content.
-    minimapView.textLayoutManager?.replace(textContentStorage)
-    textContentStorage.primaryTextLayoutManager = textLayoutManager
-    minimapView.delegate = minimapCodeViewDelegate
-    minimapView.textLayoutManager?.setSafeRenderingAttributesValidator(with: 
-                                                                        minimapCodeViewDelegate) { (minimapLayoutManager,
-                                                                                                    layoutFragment) in
-      guard let textContentStorage = minimapLayoutManager.textContentManager as? NSTextContentStorage else { return }
-      codeStorage.setHighlightingAttributes(for: textContentStorage.range(for: layoutFragment.rangeInElement),
-                                            in: minimapLayoutManager)
-    }.flatMap { observations.append($0) }
-    minimapView.textLayoutManager?.delegate = minimapTextLayoutManagerDelegate
-
-    let font = theme.font
-    minimapView.font                                = OSFont(name: font.fontName, size: font.pointSize / minimapRatio)!
-    minimapView.backgroundColor                     = backgroundColor
-    minimapView.autoresizingMask                    = .none
-    minimapView.isEditable                          = false
-    minimapView.isSelectable                        = false
-    minimapView.isHorizontallyResizable             = false
-    minimapView.isVerticallyResizable               = true
-    minimapView.textContainerInset                  = .zero
-    minimapView.textContainer?.widthTracksTextView  = false    // we need to be able to control the size (see `tile()`)
-    minimapView.textContainer?.heightTracksTextView = false
-    minimapView.textContainer?.lineBreakMode        = .byWordWrapping
-    self.minimapView = minimapView
-    // NB: The minimap view is floating. We cannot add it now, as we don't have an `enclosingScrollView` yet.
-
-    minimapView.addSubview(minimapGutterView)
-    self.minimapGutterView = minimapGutterView
-
-    let documentVisibleBox = NSBox()
-    documentVisibleBox.boxType     = .custom
-    documentVisibleBox.fillColor   = theme.textColour.withAlphaComponent(0.1)
-    documentVisibleBox.borderWidth = 0
-    minimapView.addSubview(documentVisibleBox)
-    self.documentVisibleBox = documentVisibleBox
+    // Note: Minimap is created lazily in layout() when viewLayout.showMinimap becomes true
 
     maxSize = CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-
-
-    // This is needed to redo layout of the minimap once all the views are laid out.
-    // FIXME: Unfortunately, this comes with a visible delay, though.
-    Task { @MainActor in
-      minimapView.textLayoutManager?.invalidateLayout(for: minimapView.textLayoutManager!.documentRange)
-    }
 
     // We need to re-tile the subviews whenever the frame of the text view changes.
     frameChangedNotificationObserver
@@ -761,6 +740,99 @@ final class CodeView: NSTextView {
     if let observer = didChangeSelectionNotificationObserver { NotificationCenter.default.removeObserver(observer) }
   }
 
+  // MARK: - Minimap Lazy Setup/Teardown
+
+  /// Creates the minimap views and registers the minimap's text layout manager.
+  /// Called lazily when `showMinimap` becomes true.
+  private func setupMinimap() {
+    guard minimapView == nil,
+          let codeStorage = textStorage as? CodeStorage,
+          let textContentStorage = textLayoutManager?.textContentManager as? NSTextContentStorage
+    else { return }
+
+    let minimapView        = MinimapView(),
+        minimapGutterView  = GutterView(frame: CGRect.zero,
+                                        textView: minimapView,
+                                        codeStorage: codeStorage,
+                                        theme: theme,
+                                        getMessageViews: { [weak self] in self?.messageViews ?? [:] },
+                                        isMinimapGutter: true),
+        minimapDividerView = NSBox()
+    minimapView.codeView = self
+
+    minimapDividerView.boxType     = .custom
+    minimapDividerView.fillColor   = .separatorColor
+    minimapDividerView.borderWidth = 0
+    self.minimapDividerView = minimapDividerView
+    // NB: The divider view is floating. We cannot add it now, as we don't have an `enclosingScrollView` yet.
+
+    // Register the text layout manager of the minimap view as a secondary layout manager
+    minimapView.textLayoutManager?.replace(textContentStorage)
+    textContentStorage.primaryTextLayoutManager = textLayoutManager
+    minimapView.delegate = minimapCodeViewDelegate
+    minimapView.textLayoutManager?.setSafeRenderingAttributesValidator(with:
+                                                                        minimapCodeViewDelegate) { (minimapLayoutManager,
+                                                                                                    layoutFragment) in
+      guard let textContentStorage = minimapLayoutManager.textContentManager as? NSTextContentStorage else { return }
+      codeStorage.setHighlightingAttributes(for: textContentStorage.range(for: layoutFragment.rangeInElement),
+                                            in: minimapLayoutManager)
+    }.flatMap { observations.append($0) }
+    minimapView.textLayoutManager?.delegate = minimapTextLayoutManagerDelegate
+
+    let font = theme.font
+    minimapView.font                                = OSFont(name: font.fontName, size: font.pointSize / minimapRatio)!
+    minimapView.backgroundColor                     = backgroundColor
+    minimapView.autoresizingMask                    = .none
+    minimapView.isEditable                          = false
+    minimapView.isSelectable                        = false
+    minimapView.isHorizontallyResizable             = false
+    minimapView.isVerticallyResizable               = true
+    minimapView.textContainerInset                  = .zero
+    minimapView.textContainer?.widthTracksTextView  = false
+    minimapView.textContainer?.heightTracksTextView = false
+    minimapView.textContainer?.lineBreakMode        = .byWordWrapping
+    self.minimapView = minimapView
+    // NB: The minimap view is floating. We cannot add it now, as we don't have an `enclosingScrollView` yet.
+
+    minimapView.addSubview(minimapGutterView)
+    self.minimapGutterView = minimapGutterView
+
+    let documentVisibleBox = NSBox()
+    documentVisibleBox.boxType     = .custom
+    documentVisibleBox.fillColor   = theme.textColour.withAlphaComponent(0.1)
+    documentVisibleBox.borderWidth = 0
+    minimapView.addSubview(documentVisibleBox)
+    self.documentVisibleBox = documentVisibleBox
+
+    // Redo layout of the minimap once set up
+    Task { @MainActor in
+      minimapView.textLayoutManager?.invalidateLayout(for: minimapView.textLayoutManager!.documentRange)
+    }
+  }
+
+  /// Removes the minimap views and unregisters the minimap's text layout manager.
+  /// Called when `showMinimap` becomes false.
+  private func teardownMinimap() {
+    guard let minimapView = minimapView else { return }
+
+    // Remove the minimap's layout manager from the shared text content storage
+    if let minimapLayoutManager = minimapView.textLayoutManager,
+       let textContentStorage = minimapLayoutManager.textContentManager as? NSTextContentStorage {
+      textContentStorage.removeTextLayoutManager(minimapLayoutManager)
+    }
+
+    // Remove views
+    documentVisibleBox?.removeFromSuperview()
+    minimapGutterView?.removeFromSuperview()
+    minimapView.removeFromSuperview()
+    minimapDividerView?.removeFromSuperview()
+
+    // Nil out properties
+    self.documentVisibleBox  = nil
+    self.minimapGutterView   = nil
+    self.minimapView         = nil
+    self.minimapDividerView  = nil
+  }
 
   // MARK: Overrides
 
@@ -789,6 +861,13 @@ final class CodeView: NSTextView {
   }
 
   override func layout() {
+    // Handle lazy minimap setup/teardown based on viewLayout.showMinimap
+    if viewLayout.showMinimap {
+      setupMinimap()  // No-op if already set up
+    } else {
+      teardownMinimap()  // No-op if already torn down
+    }
+
     tile()
     adjustScrollPositionOfMinimap()
     super.layout()
