@@ -973,6 +973,15 @@ final class CodeBackgroundHighlightView: NSBox {
 
 extension CodeView {
 
+  // MARK: Highlighting
+  
+  /// Forces a complete refresh of syntax highlighting by redisplaying rendering attributes.
+  public func forceRedrawHighlighting() {
+    if let textLayoutManager = textLayoutManager {
+      textLayoutManager.redisplayRenderingAttributes(for: textLayoutManager.documentRange)
+    }
+  }
+
   // MARK: Background highlights
   
   /// Update the code background for the given selection change.

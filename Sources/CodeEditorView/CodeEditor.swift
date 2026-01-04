@@ -60,6 +60,7 @@ public struct CodeEditor {
   @Binding private var position: Position
   @Binding private var messages: Set<TextLocated<Message>>
 
+  @Environment(\.codeEditorRefreshTrigger)           private var refreshTrigger
   @Environment(\.codeEditorLayoutConfiguration)      private var layoutConfiguration
   @Environment(\.codeEditorIndentationConfiguration) private var indentationConfiguration
   @Environment(\.codeEditorSetActions)               private var setActions
@@ -150,6 +151,9 @@ public struct CodeEditor {
     /// being updated, and hence, whether state updates ought to be avoided or delayed.
     ///
     fileprivate var updatingView = false
+
+    /// The last seen refresh trigger value to avoid redundant redraws
+    fileprivate var lastRefreshTrigger: UInt64 = 0
 
     /// The current set of code actions, which, on setting, are immediately propagated to the context.
     ///
@@ -383,11 +387,24 @@ extension EnvironmentValues {
 
 // MARK: Custom highlighter
 
-extension EnvironmentValues {
+public struct CustomHighlighterKey: EnvironmentKey {
+  public static let defaultValue: CustomHighlighter? = nil
+}
 
-  /// Custom highlighter for app-specific syntax highlighting.
-  /// When set, replaces the default token-based highlighting.
-  @Entry public var codeEditorCustomHighlighter: CustomHighlighter? = nil
+public struct RefreshTriggerKey: EnvironmentKey {
+  public static let defaultValue: UInt64 = 0
+}
+
+extension EnvironmentValues {
+  public var codeEditorCustomHighlighter: CustomHighlighter? {
+    get { self[CustomHighlighterKey.self] }
+    set { self[CustomHighlighterKey.self] = newValue }
+  }
+
+  public var codeEditorRefreshTrigger: UInt64 {
+    get { self[RefreshTriggerKey.self] }
+    set { self[RefreshTriggerKey.self] = newValue }
+  }
 }
 
 
@@ -649,6 +666,10 @@ extension CodeEditor: UIViewRepresentable {
     if definitiveLayout != codeView.viewLayout { codeView.viewLayout = definitiveLayout }
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
     codeView.customHighlighter = context.environment.codeEditorCustomHighlighter
+    if refreshTrigger != context.coordinator.lastRefreshTrigger {
+      context.coordinator.lastRefreshTrigger = refreshTrigger
+      codeView.forceRedrawHighlighting()
+    }
     // Equality on language configurations implies the same name and the same language service.
     if language != codeView.language {
       codeView.language                 = language
@@ -859,6 +880,10 @@ extension CodeEditor: NSViewRepresentable {
     if definitiveLayout != codeView.viewLayout { codeView.viewLayout = definitiveLayout }
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
     codeView.customHighlighter = context.environment.codeEditorCustomHighlighter
+    if refreshTrigger != context.coordinator.lastRefreshTrigger {
+      context.coordinator.lastRefreshTrigger = refreshTrigger
+      codeView.forceRedrawHighlighting()
+    }
     // Equality on language configurations implies the same name and the same language service.
     if language != codeView.language {
 
