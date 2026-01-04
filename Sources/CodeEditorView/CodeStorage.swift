@@ -188,15 +188,15 @@ extension CodeStorage {
       guard let contentStorage = layoutManager.textContentManager as? NSTextContentStorage
       else { return }
 
-      // Always apply default text color as base (uses cached dictionary to avoid allocation)
-      if let textRange = contentStorage.textRange(for: range) {
-        layoutManager.setRenderingAttributes(defaultHighlightingAttrs, for: textRange)
-      }
-
       // Use custom highlighter if provided, otherwise use token-based highlighting
       if let customHighlighter {
+        // Custom highlighter is responsible for setting all colors including defaults
         customHighlighter(string, range, layoutManager)
       } else {
+        // Apply default text color as base for token-based highlighting
+        if let textRange = contentStorage.textRange(for: range) {
+          layoutManager.setRenderingAttributes(defaultHighlightingAttrs, for: textRange)
+        }
         enumerateTokens(in: range) { lineToken in
 
           if let documentRange = lineToken.range.intersection(range),
