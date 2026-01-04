@@ -215,29 +215,53 @@ extension CodeEditor {
     ///
     public var wrapText: Bool
 
+    /// Show scrollbars.
+    ///
+    public var showScrollbars: Bool
+
+    /// Forces the layout manager to calculate the full layout for the entire document.
+    /// This ensures an accurate scrollbar but may impact performance for very large documents.
+    public var forceAccurateLayout: Bool
+
     /// Creates a layout configuration.
     ///
     /// - Parameters:
     ///   - showMinimap: Whether to show the minimap if possible. It may not be possible on all supported OSes.
     ///   - wrapText: Whether lines of text may extend beyond the width of the text area or are getting wrapped.
+    ///   - showScrollbars: Whether to show scrollbars.
+    ///   - forceAccurateLayout: Whether to force an accurate layout calculation for the entire document.
     ///
-    public init(showMinimap: Bool, wrapText: Bool) {
-      self.showMinimap = showMinimap
-      self.wrapText    = wrapText
+    public init(showMinimap: Bool, wrapText: Bool, showScrollbars: Bool = true, forceAccurateLayout: Bool = false) {
+      self.showMinimap         = showMinimap
+      self.wrapText            = wrapText
+      self.showScrollbars      = showScrollbars
+      self.forceAccurateLayout = forceAccurateLayout
     }
 
-    public static let standard = LayoutConfiguration(showMinimap: true, wrapText: true)
+    public static let standard = LayoutConfiguration(showMinimap: true, wrapText: true, showScrollbars: true, forceAccurateLayout: false)
 
     // MARK: For 'RawRepresentable'
 
-    public var rawValue: String { "\(showMinimap ? "t" : "f")\(wrapText ? "t" : "f")" }
+    public var rawValue: String { "\(showMinimap ? "t" : "f")\(wrapText ? "t" : "f")\(showScrollbars ? "t" : "f")\(forceAccurateLayout ? "t" : "f")" }
 
     public init?(rawValue: String) {
-      guard rawValue.count == 2
+      guard rawValue.count >= 2 && rawValue.count <= 4
       else { return nil }
 
       self.showMinimap = rawValue[rawValue.startIndex] == "t"
       self.wrapText    = rawValue[rawValue.index(after: rawValue.startIndex)] == "t"
+      
+      if rawValue.count >= 3 {
+        self.showScrollbars = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 2)] == "t"
+      } else {
+        self.showScrollbars = true
+      }
+      
+      if rawValue.count == 4 {
+        self.forceAccurateLayout = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 3)] == "t"
+      } else {
+        self.forceAccurateLayout = false
+      }
     }
   }
 }
@@ -688,8 +712,9 @@ extension CodeEditor: NSViewRepresentable {
 
     // Set up scroll view
     let scrollView = NSScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 40))
-    scrollView.borderType          = .noBorder
-    scrollView.hasVerticalScroller = true
+    scrollView.borderType            = .noBorder
+    scrollView.hasVerticalScroller   = definitiveLayout.showScrollbars
+    scrollView.hasHorizontalScroller = !viewLayout.wrapText && definitiveLayout.showScrollbars
     scrollView.hasHorizontalRuler  = false
     scrollView.autoresizingMask    = [.width, .height]
 

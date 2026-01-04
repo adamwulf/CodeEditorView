@@ -1100,6 +1100,10 @@ extension CodeView {
   private func tile() {
     guard let codeContainer = optTextContainer as? CodeContainer else { return }
 
+    if viewLayout.forceAccurateLayout {
+      textLayoutManager?.ensureLayout(for: textLayoutManager!.documentRange)
+    }
+
 #if os(macOS)
     // Add the floating views if they are not yet in the view hierachy.
     // NB: Since macOS 14, we need to explicitly set clipping; otherwise, views will draw outside of the bounds of the
@@ -1173,10 +1177,12 @@ extension CodeView {
     }
 
 #if os(iOS) || os(visionOS)
-    showsHorizontalScrollIndicator = !viewLayout.wrapText
+    showsHorizontalScrollIndicator = !viewLayout.wrapText && viewLayout.showScrollbars
+    showsVerticalScrollIndicator   = viewLayout.showScrollbars
     if viewLayout.wrapText && frame.size.width != visibleWidth { frame.size.width = visibleWidth }  // don't update frames in vain
 #elseif os(macOS)
-    enclosingScrollView?.hasHorizontalScroller = !viewLayout.wrapText
+    enclosingScrollView?.hasHorizontalScroller = !viewLayout.wrapText && viewLayout.showScrollbars
+    enclosingScrollView?.hasVerticalScroller   = viewLayout.showScrollbars
     isHorizontallyResizable                    = !viewLayout.wrapText
     if !isHorizontallyResizable && frame.size.width != visibleWidth { frame.size.width = visibleWidth }  // don't update frames in vain
 #endif
