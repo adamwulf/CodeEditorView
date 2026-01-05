@@ -6,6 +6,15 @@
 //
 
 import SwiftUI
+import Foundation
+
+
+private var flushRenderingAttributesKey: UInt8 = 0
+
+private class FlushWrapper {
+  let flush: () -> Void
+  init(_ flush: @escaping () -> Void) { self.flush = flush }
+}
 
 
 // MARK: -
@@ -298,12 +307,16 @@ extension NSTextLayoutManager {
       }
     }
 
-    func processFragements() {
+    let processFragements = { [weak self] in
+      guard let self = self else { return }
+
       let fragments = pendingFragments.fragments
       pendingFragments.fragments = []
       fragments.forEach {
         renderingAttributesValidator(self, $0) }
     }
+
+    objc_setAssociatedObject(self, &flushRenderingAttributesKey, FlushWrapper(processFragements), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
     // After a text change is reported to the view's delegate, always process all pending fragments.
     let currentTextDidChange = codeViewDelegate.textDidChange
@@ -335,6 +348,12 @@ extension NSTextLayoutManager {
 
       renderingAttributesValidator?(self, textLayoutFragment)
       return true
+    }
+
+    if textContentManager?.hasEditingTransaction == false,
+       let wrapper = objc_getAssociatedObject(self, &flushRenderingAttributesKey) as? FlushWrapper
+    {
+      wrapper.flush()
     }
   }
 }
