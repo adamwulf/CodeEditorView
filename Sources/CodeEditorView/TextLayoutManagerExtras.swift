@@ -331,7 +331,7 @@ extension NSTextLayoutManager {
   ///
   func redisplayRenderingAttributes(for textRange: NSTextRange) {
     invalidateRenderingAttributes(for: textRange)
-    enumerateTextLayoutFragments(in: textRange) { textLayoutFragment in
+    enumerateTextLayoutFragments(in: textRange, options: [.ensuresLayout]) { textLayoutFragment in
 
       renderingAttributesValidator?(self, textLayoutFragment)
       return true
