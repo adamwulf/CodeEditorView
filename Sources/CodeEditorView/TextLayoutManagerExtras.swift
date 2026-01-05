@@ -358,15 +358,3 @@ extension NSTextLayoutManager {
   }
 }
 
-// MARK: -
-// MARK: 'NSTextContentManager' extras
-
-extension NSTextContentManager {
-  /// Yield the text range for a given character range.
-  public func textRange(for charRange: NSRange) -> NSTextRange? {
-    if let storage = self as? NSTextContentStorage {
-      return storage.textRange(for: charRange)
-    }
-    return nil
-  }
-}
