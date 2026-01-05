@@ -35,6 +35,12 @@ public protocol CodeHighlighter: AnyObject {
     ///   - layoutManager: The layout manager on which to set rendering attributes.
     func highlight(text: String, range: NSRange, layoutManager: NSTextLayoutManager)
 
+    /// Called by the editor when text is edited.
+    /// - Parameters:
+    ///   - range: The character range of text being replaced.
+    ///   - delta: The change in character length (positive for additions, negative for deletions).
+    func textEdited(range: NSRange, delta: Int)
+
     /// Callback set by the editor. Call this when the highlighter's cache updates
     /// and the editor needs to refresh its display.
     var onNeedsRefresh: (() -> Void)? { get set }
@@ -100,9 +106,10 @@ class CodeStorage: NSTextStorage {
 
   // Extended to handle auto-deletion of adjacent matching brackets
   override func replaceCharacters(in range: NSRange, with str: String) {
-
+    let delta = (str as NSString).length - range.length
     beginEditing()
     editGeneration &+= 1  // Overflow-safe increment for cache invalidation
+    codeHighlighter?.textEdited(range: range, delta: delta)
 
     // We are deleting one character => check whether it is a one-character bracket and if so also delete its matching
     // bracket if it is directly adjacent
