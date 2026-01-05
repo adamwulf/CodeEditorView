@@ -138,6 +138,8 @@ final class CodeView: UITextView {
       optCodeStorage?.codeHighlighter = newValue
       // Register for refresh callbacks
       newValue?.onNeedsRefresh = { [weak self] in
+        let ts = String(format: "%.3f", Date().timeIntervalSince1970.truncatingRemainder(dividingBy: 100))
+        print("\(ts) onNeedsRefresh callback, self=\(self != nil)")
         self?.forceRedrawHighlighting()
       }
       // Trigger re-highlighting when highlighter is first set
@@ -532,6 +534,8 @@ final class CodeView: NSTextView {
       optCodeStorage?.codeHighlighter = newValue
       // Register for refresh callbacks
       newValue?.onNeedsRefresh = { [weak self] in
+        let ts = String(format: "%.3f", Date().timeIntervalSince1970.truncatingRemainder(dividingBy: 100))
+        print("\(ts) onNeedsRefresh callback, self=\(self != nil)")
         self?.forceRedrawHighlighting()
       }
       // Trigger re-highlighting when highlighter is first set
@@ -983,6 +987,8 @@ extension CodeView {
   
   /// Forces a complete refresh of syntax highlighting by redisplaying rendering attributes.
   public func forceRedrawHighlighting() {
+    let ts = String(format: "%.3f", Date().timeIntervalSince1970.truncatingRemainder(dividingBy: 100))
+    print("\(ts) forceRedrawHighlighting called, hasLayoutManager=\(textLayoutManager != nil)")
     if let textLayoutManager = textLayoutManager {
       textLayoutManager.redisplayRenderingAttributes(for: textLayoutManager.documentRange)
     }
