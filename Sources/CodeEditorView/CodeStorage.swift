@@ -25,13 +25,20 @@ typealias EditActions = NSTextStorageEditActions
 // MARK: -
 // MARK: `NSTextStorage` subclass
 
-/// Custom highlighter closure type for app-specific syntax highlighting.
-/// When set, this replaces the default token-based highlighting.
-/// - Parameters:
-///   - text: The full text content of the document.
-///   - range: The range to highlight (typically the visible range being rendered).
-///   - layoutManager: The layout manager on which to set rendering attributes.
-public typealias CustomHighlighter = (_ text: String, _ range: NSRange, _ layoutManager: NSTextLayoutManager) -> Void
+/// Protocol for custom syntax highlighters that can request editor refresh.
+/// When set on CodeView, this replaces the default token-based highlighting.
+public protocol CodeHighlighter: AnyObject {
+    /// Called by the editor to apply highlighting to a range of text.
+    /// - Parameters:
+    ///   - text: The full text content of the document.
+    ///   - range: The range to highlight (typically the visible range being rendered).
+    ///   - layoutManager: The layout manager on which to set rendering attributes.
+    func highlight(text: String, range: NSRange, layoutManager: NSTextLayoutManager)
+
+    /// Callback set by the editor. Call this when the highlighter's cache updates
+    /// and the editor needs to refresh its display.
+    var onNeedsRefresh: (() -> Void)? { get set }
+}
 
 // `NSTextStorage` is a class cluster; hence, we realise our subclass by decorating an embeded vanilla text storage.
 class CodeStorage: NSTextStorage {
@@ -45,9 +52,9 @@ class CodeStorage: NSTextStorage {
     }
   }
 
-  /// Custom highlighter closure for app-specific syntax highlighting.
+  /// Protocol-based highlighter that supports refresh callbacks.
   /// When set, this replaces the default token-based highlighting.
-  public var customHighlighter: CustomHighlighter?
+  public weak var codeHighlighter: CodeHighlighter?
 
   /// Counter incremented on each edit, used for efficient cache invalidation.
   /// Highlighters can compare this against a cached value instead of computing expensive text hashes.
@@ -189,9 +196,9 @@ extension CodeStorage {
       else { return }
 
       // Use custom highlighter if provided, otherwise use token-based highlighting
-      if let customHighlighter {
+      if let codeHighlighter {
         // Custom highlighter is responsible for setting all colors including defaults
-        customHighlighter(string, range, layoutManager)
+        codeHighlighter.highlight(text: string, range: range, layoutManager: layoutManager)
       } else {
         // Apply default text color as base for token-based highlighting
         if let textRange = contentStorage.textRange(for: range) {

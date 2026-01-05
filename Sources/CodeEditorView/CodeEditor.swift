@@ -387,8 +387,8 @@ extension EnvironmentValues {
 
 // MARK: Custom highlighter
 
-public struct CustomHighlighterKey: EnvironmentKey {
-  public static let defaultValue: CustomHighlighter? = nil
+public struct CodeHighlighterKey: EnvironmentKey {
+  public static let defaultValue: CodeHighlighter? = nil
 }
 
 public struct RefreshTriggerKey: EnvironmentKey {
@@ -396,9 +396,10 @@ public struct RefreshTriggerKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-  public var codeEditorCustomHighlighter: CustomHighlighter? {
-    get { self[CustomHighlighterKey.self] }
-    set { self[CustomHighlighterKey.self] = newValue }
+  /// Protocol-based highlighter with refresh callback support.
+  public var codeEditorHighlighter: CodeHighlighter? {
+    get { self[CodeHighlighterKey.self] }
+    set { self[CodeHighlighterKey.self] = newValue }
   }
 
   public var codeEditorRefreshTrigger: UInt64 {
@@ -665,7 +666,7 @@ extension CodeEditor: UIViewRepresentable {
     if theme.id != codeView.theme.id { codeView.theme = theme }
     if definitiveLayout != codeView.viewLayout { codeView.viewLayout = definitiveLayout }
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
-    codeView.customHighlighter = context.environment.codeEditorCustomHighlighter
+    codeView.codeHighlighter = context.environment.codeEditorHighlighter
     if refreshTrigger != context.coordinator.lastRefreshTrigger {
       context.coordinator.lastRefreshTrigger = refreshTrigger
       codeView.forceRedrawHighlighting()
@@ -879,7 +880,7 @@ extension CodeEditor: NSViewRepresentable {
     if theme.id != codeView.theme.id { codeView.theme = theme }
     if definitiveLayout != codeView.viewLayout { codeView.viewLayout = definitiveLayout }
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
-    codeView.customHighlighter = context.environment.codeEditorCustomHighlighter
+    codeView.codeHighlighter = context.environment.codeEditorHighlighter
     if refreshTrigger != context.coordinator.lastRefreshTrigger {
       context.coordinator.lastRefreshTrigger = refreshTrigger
       codeView.forceRedrawHighlighting()

@@ -128,16 +128,19 @@ final class CodeView: UITextView {
   ///
   var indentation: CodeEditor.IndentationConfiguration = .standard
 
-  /// Custom highlighter for app-specific syntax highlighting.
-  /// When set, replaces the default token-based highlighting and triggers re-rendering.
-  public var customHighlighter: CustomHighlighter? {
-    get { optCodeStorage?.customHighlighter }
+  /// Protocol-based highlighter with refresh callback support.
+  /// When set, replaces the default token-based highlighting.
+  /// The highlighter can call `onNeedsRefresh` to trigger re-rendering.
+  public var codeHighlighter: CodeHighlighter? {
+    get { optCodeStorage?.codeHighlighter }
     set {
-      let wasNil = optCodeStorage?.customHighlighter == nil
-      optCodeStorage?.customHighlighter = newValue
-      // Trigger re-highlighting when highlighter is first set (nil → closure)
-      // This ensures highlighting works on app startup when the highlighter
-      // is set after the initial layout pass.
+      let wasNil = optCodeStorage?.codeHighlighter == nil
+      optCodeStorage?.codeHighlighter = newValue
+      // Register for refresh callbacks
+      newValue?.onNeedsRefresh = { [weak self] in
+        self?.forceRedrawHighlighting()
+      }
+      // Trigger re-highlighting when highlighter is first set
       if wasNil && newValue != nil,
          let textLayoutManager = textLayoutManager {
         textLayoutManager.redisplayRenderingAttributes(for: textLayoutManager.documentRange)
@@ -514,21 +517,24 @@ final class CodeView: NSTextView {
   ///
   @Invalidating(.layout)
   var viewLayout: CodeEditor.LayoutConfiguration = .standard
-  
+
   /// The current indentation configuration.
   ///
   var indentation: CodeEditor.IndentationConfiguration = .standard
 
-  /// Custom highlighter for app-specific syntax highlighting.
-  /// When set, replaces the default token-based highlighting and triggers re-rendering.
-  public var customHighlighter: CustomHighlighter? {
-    get { optCodeStorage?.customHighlighter }
+  /// Protocol-based highlighter with refresh callback support.
+  /// When set, replaces the default token-based highlighting.
+  /// The highlighter can call `onNeedsRefresh` to trigger re-rendering.
+  public var codeHighlighter: CodeHighlighter? {
+    get { optCodeStorage?.codeHighlighter }
     set {
-      let wasNil = optCodeStorage?.customHighlighter == nil
-      optCodeStorage?.customHighlighter = newValue
-      // Trigger re-highlighting when highlighter is first set (nil → closure)
-      // This ensures highlighting works on app startup when the highlighter
-      // is set after the initial layout pass.
+      let wasNil = optCodeStorage?.codeHighlighter == nil
+      optCodeStorage?.codeHighlighter = newValue
+      // Register for refresh callbacks
+      newValue?.onNeedsRefresh = { [weak self] in
+        self?.forceRedrawHighlighting()
+      }
+      // Trigger re-highlighting when highlighter is first set
       if wasNil && newValue != nil,
          let textLayoutManager = textLayoutManager {
         textLayoutManager.redisplayRenderingAttributes(for: textLayoutManager.documentRange)
