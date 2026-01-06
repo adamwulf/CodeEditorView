@@ -558,6 +558,58 @@ extension EnvironmentValues {
 }
 
 
+// MARK: Paste handling
+
+extension CodeEditor {
+
+  /// Result of a paste handler indicating whether to proceed with standard paste.
+  ///
+  public enum PasteHandlerResult {
+    /// The handler processed the paste; do not perform standard paste.
+    case handled
+    /// The handler did not process the paste; perform standard paste.
+    case notHandled
+  }
+
+  /// A paste handler that can intercept paste operations.
+  ///
+  /// - Parameters:
+  ///   - pasteboardString: The string content from the pasteboard.
+  ///   - selectedRange: The current selection range in the text view.
+  ///   - selectedText: The currently selected text (empty if no selection).
+  ///   - replaceText: A closure to replace the selected range with new text.
+  /// - Returns: Whether the paste was handled.
+  ///
+  public struct PasteHandler {
+    let handler: (_ pasteboardString: String,
+                  _ selectedRange: NSRange,
+                  _ selectedText: String,
+                  _ replaceText: @escaping (String) -> Void) -> PasteHandlerResult
+
+    public static let none: PasteHandler = .init { _, _, _, _ in .notHandled }
+
+    public init(_ handler: @escaping (_ pasteboardString: String,
+                                       _ selectedRange: NSRange,
+                                       _ selectedText: String,
+                                       _ replaceText: @escaping (String) -> Void) -> PasteHandlerResult) {
+      self.handler = handler
+    }
+
+    func callAsFunction(pasteboardString: String,
+                        selectedRange: NSRange,
+                        selectedText: String,
+                        replaceText: @escaping (String) -> Void) -> PasteHandlerResult {
+      handler(pasteboardString, selectedRange, selectedText, replaceText)
+    }
+  }
+}
+
+extension EnvironmentValues {
+
+  @Entry public var codeEditorPasteHandler: CodeEditor.PasteHandler = .none
+}
+
+
 #if os(iOS) || os(visionOS)
 
 // MARK: -
@@ -667,6 +719,7 @@ extension CodeEditor: UIViewRepresentable {
     if definitiveLayout != codeView.viewLayout { codeView.viewLayout = definitiveLayout }
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
     codeView.codeHighlighter = context.environment.codeEditorHighlighter
+    codeView.pasteHandler = context.environment.codeEditorPasteHandler
     if refreshTrigger != context.coordinator.lastRefreshTrigger {
       context.coordinator.lastRefreshTrigger = refreshTrigger
       codeView.forceRedrawHighlighting()
@@ -881,6 +934,7 @@ extension CodeEditor: NSViewRepresentable {
     if definitiveLayout != codeView.viewLayout { codeView.viewLayout = definitiveLayout }
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
     codeView.codeHighlighter = context.environment.codeEditorHighlighter
+    codeView.pasteHandler = context.environment.codeEditorPasteHandler
     if refreshTrigger != context.coordinator.lastRefreshTrigger {
       context.coordinator.lastRefreshTrigger = refreshTrigger
       codeView.forceRedrawHighlighting()

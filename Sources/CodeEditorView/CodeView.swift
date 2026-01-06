@@ -148,6 +148,10 @@ final class CodeView: UITextView {
     }
   }
 
+  /// Optional paste handler for custom paste behavior.
+  /// When set, this handler is called before standard paste processing.
+  public var pasteHandler: CodeEditor.PasteHandler = .none
+
   /// Hook to propagate message sets upwards in the view hierarchy.
   ///
   let setMessages: (Set<TextLocated<Message>>) -> Void
@@ -365,6 +369,39 @@ final class CodeView: UITextView {
     gutterView?.setNeedsDisplay()
     minimapGutterView?.setNeedsDisplay()
   }
+
+  override func paste(_ sender: Any?) {
+    let pasteboard = UIPasteboard.general
+
+    // Check if we have string content in the pasteboard
+    guard let pasteboardString = pasteboard.string else {
+      super.paste(sender)
+      return
+    }
+
+    let selection = selectedRange
+    let selectedText = (text as NSString).substring(with: selection)
+
+    // Create a closure to replace the selected text
+    let replaceText: (String) -> Void = { [weak self] replacement in
+      guard let self = self,
+            let textRange = self.textRange(from: self.position(from: self.beginningOfDocument, offset: selection.location)!,
+                                           to: self.position(from: self.beginningOfDocument, offset: selection.location + selection.length)!)
+      else { return }
+      self.replace(textRange, withText: replacement)
+    }
+
+    // Call the paste handler
+    let result = pasteHandler(pasteboardString: pasteboardString,
+                              selectedRange: selection,
+                              selectedText: selectedText,
+                              replaceText: replaceText)
+
+    // If the handler didn't handle the paste, do the standard paste
+    if case .notHandled = result {
+      super.paste(sender)
+    }
+  }
 }
 
 final class CodeViewDelegate: NSObject, UITextViewDelegate {
@@ -541,6 +578,10 @@ final class CodeView: NSTextView {
       }
     }
   }
+
+  /// Optional paste handler for custom paste behavior.
+  /// When set, this handler is called before standard paste processing.
+  public var pasteHandler: CodeEditor.PasteHandler = .none
 
   /// Hook to propagate message sets upwards in the view hierarchy.
   ///
@@ -899,6 +940,36 @@ final class CodeView: NSTextView {
     super.layout()
     gutterView?.needsDisplay        = true
     minimapGutterView?.needsDisplay = true
+  }
+
+  override func paste(_ sender: Any?) {
+    let pasteboard = NSPasteboard.general
+
+    // Check if we have a paste handler and string content in the pasteboard
+    guard let pasteboardString = pasteboard.string(forType: .string) else {
+      super.paste(sender)
+      return
+    }
+
+    let selection = selectedRange()
+    let selectedText = (string as NSString).substring(with: selection)
+
+    // Create a closure to replace the selected text
+    let replaceText: (String) -> Void = { [weak self] replacement in
+      guard let self = self else { return }
+      self.insertText(replacement, replacementRange: selection)
+    }
+
+    // Call the paste handler
+    let result = pasteHandler(pasteboardString: pasteboardString,
+                              selectedRange: selection,
+                              selectedText: selectedText,
+                              replaceText: replaceText)
+
+    // If the handler didn't handle the paste, do the standard paste
+    if case .notHandled = result {
+      super.paste(sender)
+    }
   }
 }
 
