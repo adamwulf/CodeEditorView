@@ -6,6 +6,15 @@
 //
 
 import SwiftUI
+import Foundation
+
+
+private var flushRenderingAttributesKey: UInt8 = 0
+
+private class FlushWrapper {
+  let flush: () -> Void
+  init(_ flush: @escaping () -> Void) { self.flush = flush }
+}
 
 
 // MARK: -
@@ -15,7 +24,7 @@ extension NSTextLayoutFragment {
 
   /// Yield the layout fragment's frame, but without the height of an extra line fragment if present.
   ///
-  var layoutFragmentFrameWithoutExtraLineFragment: CGRect {
+  public var layoutFragmentFrameWithoutExtraLineFragment: CGRect {
     var frame = layoutFragmentFrame
 
     // If this layout fragment's last line fragment is for an empty string, then it is an extra line fragment and we
@@ -36,7 +45,7 @@ extension NSTextLayoutFragment {
   /// We simply use height of another line fragement for that of the extra line fragment and adjust the overall frame
   /// accordingly.
   ///
-  var layoutFragmentFrameAdjustedKludge: CGRect {
+  public var layoutFragmentFrameAdjustedKludge: CGRect {
     var frame = layoutFragmentFrame
 
     // If this layout fragment's last line fragment is for an empty string, then it is an extra line fragment and we
@@ -54,7 +63,7 @@ extension NSTextLayoutFragment {
   /// Yield the frame of the layout fragment's extra line fragment if present (which is the case if this the last
   /// line fragment and it is terminated by a newline character).
   ///
-  var layoutFragmentFrameExtraLineFragment: CGRect? {
+  public var layoutFragmentFrameExtraLineFragment: CGRect? {
 
     // If this layout fragment's last line fragment is for an empty string, then it is an extra line fragment and 
     // return its bounds.
@@ -84,7 +93,7 @@ extension NSTextLayoutManager {
   /// If there are gaps, they are included. If the range reaches until the end of the text and there is extra line
   /// fragment, then it is included, too.
   ///
-  func textLayoutFragmentExtent(for textRange: NSTextRange) -> (y: CGFloat, height: CGFloat)? {
+  public func textLayoutFragmentExtent(for textRange: NSTextRange) -> (y: CGFloat, height: CGFloat)? {
     let location = textRange.location
 
     if location.compare(documentRange.endLocation) == .orderedSame { // Start of range == end of the document
@@ -146,7 +155,7 @@ extension NSTextLayoutManager {
   /// - Returns: See `NSTextLayoutFragment.enumerateTextLayoutFragments(from:options:using:)`.
   ///
   @discardableResult
-  func enumerateTextLayoutFragments(in textRange: NSTextRange,
+  public func enumerateTextLayoutFragments(in textRange: NSTextRange,
                                     options: NSTextLayoutFragment.EnumerationOptions = [],
                                     using block: (NSTextLayoutFragment) -> Bool)
   -> NSTextLocation?
@@ -163,7 +172,7 @@ extension NSTextLayoutManager {
   /// - Parameter textRange: The range for which we want to compute the bounding box.
   /// - Returns: The bounding box.
   ///
-  func textLayoutFragmentBoundingRect(for textRange: NSTextRange) -> CGRect {
+  public func textLayoutFragmentBoundingRect(for textRange: NSTextRange) -> CGRect {
 
     var boundingBox: CGRect = .null
     enumerateTextLayoutFragments(in: textRange, options: [.ensuresExtraLineFragment]) { textLayoutFragment in
@@ -178,7 +187,7 @@ extension NSTextLayoutManager {
   /// - Parameter textRange: The text range for which we want to determine the first segment.
   /// - Returns: The bounding rect of the first text segment if any.
   ///
-  func boundingRectOfFirstTextSegment(for textRange: NSTextRange) -> CGRect? {
+  public func boundingRectOfFirstTextSegment(for textRange: NSTextRange) -> CGRect? {
     var result: CGRect?
     enumerateTextSegments(in: textRange, type: .standard, options: .rangeNotRequired) { (_, rect, _, _) in
       result = rect
@@ -298,12 +307,16 @@ extension NSTextLayoutManager {
       }
     }
 
-    func processFragements() {
+    let processFragements = { [weak self] in
+      guard let self = self else { return }
+
       let fragments = pendingFragments.fragments
       pendingFragments.fragments = []
       fragments.forEach {
         renderingAttributesValidator(self, $0) }
     }
+
+    objc_setAssociatedObject(self, &flushRenderingAttributesKey, FlushWrapper(processFragements), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
     // After a text change is reported to the view's delegate, always process all pending fragments.
     let currentTextDidChange = codeViewDelegate.textDidChange
@@ -331,10 +344,17 @@ extension NSTextLayoutManager {
   ///
   func redisplayRenderingAttributes(for textRange: NSTextRange) {
     invalidateRenderingAttributes(for: textRange)
-    enumerateTextLayoutFragments(in: textRange) { textLayoutFragment in
+    enumerateTextLayoutFragments(in: textRange, options: [.ensuresLayout]) { textLayoutFragment in
 
       renderingAttributesValidator?(self, textLayoutFragment)
       return true
     }
+
+    if textContentManager?.hasEditingTransaction == false,
+       let wrapper = objc_getAssociatedObject(self, &flushRenderingAttributesKey) as? FlushWrapper
+    {
+      wrapper.flush()
+    }
   }
 }
+

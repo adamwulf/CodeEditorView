@@ -16,20 +16,48 @@ struct LineMap<LineInfo> {
   ///
   typealias OneLine = (range: NSRange, info: LineInfo?)
 
-  /// One entry per line of the underlying string.
+  /// Box for a cached lookup to allow sharing across copies of the struct and non-mutating updates.
   ///
-  var lines: [OneLine] = []
+  private class LookupCache {
+    var index: Int = -1
+    var line: Int = -1
+  }
+
+  /// The start positions of all lines.
+  ///
+  /// NB: This array always contains one extra element at the end, which is the end-of-string position (sentinel).
+  ///
+  private(set) var lineStarts: [Int] = []
+
+  /// The information for each line.
+  ///
+  private(set) var lineInfos: [LineInfo?] = []
+
+  /// The cached lookup information.
+  ///
+  private var lookupCache = LookupCache()
+
 
   /// MARK: -
   /// MARK: Initialisation
 
   /// Direct initialisation for testing.
   ///
-  init(lines: [OneLine]) { self.lines = lines }
+  init(lines: [OneLine]) {
+    for line in lines {
+      lineStarts.append(line.range.location)
+      lineInfos.append(line.info)
+    }
+    lineStarts.append(lines.last?.range.max ?? 0)
+  }
 
   /// Initialise a line map with the string to be mapped.
   ///
-  init(string: String) { lines.append(contentsOf: linesOf(string: string)) }
+  init(string: String) {
+    let (starts, infos) = linesOf(string: string)
+    self.lineStarts = starts
+    self.lineInfos = infos
+  }
 
 
   // MARK: -
@@ -40,16 +68,21 @@ struct LineMap<LineInfo> {
   /// - Parameter line: The zero-based line number to look up.
   /// - Returns: The description of the given line if it is within the valid range of the line map.
   ///
-  func lookup(line: Int) -> OneLine? { return (line >= 0 && line < lines.count) ? lines[line] : nil }
+  func lookup(line: Int) -> OneLine? {
+    guard line >= 0 && line < lineInfos.count else { return nil }
+    return (range: NSRange(location: lineStarts[line], length: lineStarts[line+1] - lineStarts[line]), info: lineInfos[line])
+  }
 
   /// Return the character range covered by the given range of lines. Safely handles out of bounds situations.
   ///
   /// NB: Line numbers are zero-based.
   ///
   func charRangeOf(lines: Range<Int>) -> NSRange {
-    let startRange = lookup(line: lines.first ?? 0)?.range ?? .zero,
-        endRange   = lookup(line: lines.last ?? 0)?.range ?? .zero
-    return NSRange(location: startRange.location, length: endRange.max - startRange.location)
+    let startLine = lines.first ?? 0,
+        endLine   = lines.last ?? 0
+    let startLocation = (startLine >= 0 && startLine < lineInfos.count) ? lineStarts[startLine] : 0,
+        endLocation   = (endLine >= 0 && endLine < lineInfos.count) ? lineStarts[endLine+1] : startLocation
+    return NSRange(location: startLocation, length: endLocation - startLocation)
   }
 
   /// Determine the zero-based line number of the line containing the characters at the given string index. (Safe to be
@@ -59,33 +92,53 @@ struct LineMap<LineInfo> {
   /// - Returns: The zero-based line number containing the indexed character if the index is within the bounds of the
   ///     string.
   ///
-  /// - Complexity: This functions asymptotic complexity is logarithmic in the number of lines contained in the line map.
+  /// - Complexity: Optimized with a temporal cache for $O(1)$ sequential access and $O(\log n)$ binary search on 
+  ///               tightly packed integers for maximum cache locality.
   ///
   func lineContaining(index: Int) -> Int? {
-    var lineRange = 0..<lines.count
-
-    while lineRange.count > 1 {
-
-      let middle = lineRange.startIndex + lineRange.count / 2
-      if index < lines[middle].range.location {
-
-        lineRange = lineRange.startIndex..<middle
-
-      } else {
-
-        lineRange = middle..<lineRange.endIndex
-
+    // 1. Thread-safe self-validating cache hit
+    let cachedLine = lookupCache.line
+    if cachedLine >= 0 && cachedLine < lineInfos.count {
+      // Check current cached line
+      if index >= lineStarts[cachedLine] && index < lineStarts[cachedLine + 1] {
+        return cachedLine
+      }
+      
+      // Check next line (common for forward scans)
+      let nextLine = cachedLine + 1
+      if nextLine < lineInfos.count && index >= lineStarts[nextLine] && index < lineStarts[nextLine + 1] {
+        lookupCache.index = index
+        lookupCache.line = nextLine
+        return nextLine
       }
     }
-    if lineRange.count == 0 || !lines[lineRange.startIndex].range.contains(index) {
 
+    // 2. Binary search on tightly packed lineStarts
+    let result = lineStarts.withUnsafeBufferPointer { buffer -> Int? in
+      var lo = 0
+      var hi = buffer.count - 1 // Exclude the sentinel
+      
+      while lo < hi {
+        let mid = lo + (hi - lo) >> 1
+        if buffer[mid] <= index { lo = mid + 1 }
+        else { hi = mid }
+      }
+      
+      let line = lo - 1
+      if line >= 0 && line < buffer.count - 1 {
+        if index >= buffer[line] && index < buffer[line + 1] {
+          return line
+        }
+      }
       return nil
-
-    } else {
-
-      return lineRange.startIndex
-
     }
+
+    // 3. Update cache
+    if let r = result {
+      lookupCache.index = index
+      lookupCache.line = r
+    }
+    return result
   }
 
   /// Determine the zero-based line number that contains the cursor position specified by the given string index. (Safe
@@ -102,7 +155,7 @@ struct LineMap<LineInfo> {
   ///               map.
   ///
   func lineOf(index: Int) -> Int? {
-    if let lastLine = lines.last, lastLine.range.max == index { return lines.count - 1 }
+    if lineStarts.last == index && !lineInfos.isEmpty { return lineInfos.count - 1 }
     else { return lineContaining(index: index) }
   }
 
@@ -117,11 +170,10 @@ struct LineMap<LineInfo> {
   ///               map.
   ///
   func lineAndPositionOf(index: Int) -> (line: Int, position: Int)? {
-    guard let line  = lineOf(index: index),
-          let range = lookup(line: line)?.range
+    guard let line  = lineOf(index: index)
     else { return nil }
 
-    return (line: line, position: index - range.location)
+    return (line: line, position: index - lineStarts[line])
   }
 
   /// Given a character range, return the smallest zero-based line range that includes the characters. Deal with out of
@@ -143,13 +195,14 @@ struct LineMap<LineInfo> {
       end           = range.length <= 0 ? start : range.max - 1,
       startLine     = lineOf(index: start),
       endLine       = lineContaining(index: end),
-      lastLine      = lines.count - 1,
-      lastLineRange = lines[lastLine].range
+      lastLine      = lineInfos.count - 1
 
     if let startLine = startLine {
 
       if range.length < 0 { return startLine..<startLine }
-      else if range == lastLineRange { return Range<Int>(lastLine...lastLine) }
+      else if range.location == lineStarts[lastLine] && range.length == (lineStarts.last! - lineStarts[lastLine]) { 
+        return Range<Int>(lastLine...lastLine) 
+      }
       else { return Range<Int>(startLine...(endLine ?? lastLine)) }
 
     } else {
@@ -175,10 +228,9 @@ struct LineMap<LineInfo> {
   ///   location is just behind the last character of the text.
   ///
   func linesOf(range: NSRange) -> Range<Int> {
-    let lastLine      = lines.count - 1,
-        lastLineRange = lines[lastLine].range
+    let lastLine      = lineInfos.count - 1
 
-    if range.max == lastLineRange.location && lastLineRange.length == 0 {
+    if range.max == lineStarts[lastLine] && (lineStarts.last! - lineStarts[lastLine]) == 0 {
 
       // Range reaches to the end of text => extend 'endLine' to 'lastLine'
       return Range<Int>(linesContaining(range: range).startIndex...lastLine)
@@ -204,7 +256,7 @@ struct LineMap<LineInfo> {
       // To compute the line range, we extend the character range by one extra character. This is crucial as, if the
       // edited range ends on a newline, this may insert a new line break, which means, line *after* the new line break
       // also belongs to the affected lines.
-      let oldStringRange = NSRange(location: 0, length: (lines.last?.range ?? .zero).max)
+      let oldStringRange = NSRange(location: 0, length: lineStarts.last ?? 0)
       return linesOf(range: extend(range: shiftedRange, clippingTo: oldStringRange))
 
     } else { return 0..<0 }
@@ -222,9 +274,9 @@ struct LineMap<LineInfo> {
   ///   NB: Ignores lines that do not exist.
   ///
   mutating func setInfoOf(line: Int, to info: LineInfo?) {
-    guard line < lines.count else { return }
+    guard line >= 0 && line < lineInfos.count else { return }
 
-    lines[line] = (range: lines[line].range, info: info)
+    lineInfos[line] = info
   }
 
   /// Update the line map given the specified editing activity of the underlying string. It resets the info field for
@@ -250,37 +302,40 @@ struct LineMap<LineInfo> {
         extendedEditedRange = extend(range: editedRange, clippingTo: newStringRange),
         newLinesRange       = nsString.lineRange(for: extendedEditedRange),
         newLinesString      = nsString.substring(with: newLinesRange),
-        newLines            = linesOf(string: newLinesString).map{ shift(line: $0, by: newLinesRange.location) }
+        (newStarts, newInfos) = linesOf(string: newLinesString)
+    
+    // Shift new starts to be relative to the string
+    let shiftedNewStarts = newStarts.map { $0 + newLinesRange.location }
 
     // If the newly inserted text ends on a new line, we need to remove the empty trailing line in the new lines array
     // unless the range of those new lines extends until the end of the string.
-    let dropEmptyNewLine = newLines.last?.range.length == 0 && oldLinesRange.last != lines.count - 1,
-        adjustedNewLines = dropEmptyNewLine ? newLines.dropLast() : newLines
+    let dropEmptyNewLine = (newStarts.last! - newStarts[newStarts.count - 2]) == 0 && oldLinesRange.last != lineInfos.count - 1,
+        finalNewStarts   = dropEmptyNewLine ? Array(shiftedNewStarts.dropLast()) : shiftedNewStarts,
+        finalNewInfos    = dropEmptyNewLine ? Array(newInfos.dropLast()) : newInfos
 
-    lines.replaceSubrange(oldLinesRange, with: adjustedNewLines)
+    lineStarts.replaceSubrange(oldLinesRange.startIndex..<(oldLinesRange.endIndex + 1), with: finalNewStarts)
+    lineInfos.replaceSubrange(oldLinesRange, with: finalNewInfos)
 
     // All ranges after the edited range of lines need to be adjusted.
     //
-    for i in oldLinesRange.startIndex.advanced(by: adjustedNewLines.count) ..< lines.count {
-      lines[i] = shift(line: lines[i], by: delta)
+    for i in oldLinesRange.startIndex.advanced(by: finalNewInfos.count) + 1 ..< lineStarts.count {
+      lineStarts[i] += delta
     }
+    
+    // Invalidate the cache since the underlying data has changed.
+    lookupCache = LookupCache()
   }
 
   // MARK: -
   // MARK: Helpers
 
-  /// Shift the range of `line` by `delta`.
-  ///
-  private func shift(line: OneLine, by delta: Int) -> OneLine {
-    return (range: NSRange(location: line.range.location + delta, length: line.range.length), info: line.info)
-  }
-
   /// Extract the corresponding array of line ranges out of the given string.
   ///
-  private func linesOf(string: String) -> [OneLine] {
+  private func linesOf(string: String) -> (starts: [Int], infos: [LineInfo?]) {
     let nsString = string as NSString
 
-    var resultingLines: [OneLine] = []
+    var starts: [Int] = []
+    var infos: [LineInfo?] = []
 
     // Enumerate all lines in `nsString`, adding them to the `resultingLines`.
     //
@@ -288,7 +343,8 @@ struct LineMap<LineInfo> {
     while currentIndex < nsString.length {
 
       let currentRange = nsString.lineRange(for: NSRange(location: currentIndex, length: 0))
-      resultingLines.append((range: currentRange, info: nil))
+      starts.append(currentRange.location)
+      infos.append(nil)
       currentIndex = currentRange.max
 
     }
@@ -298,15 +354,16 @@ struct LineMap<LineInfo> {
     //
     let lastRange = nsString.lineRange(for: NSRange(location: nsString.length, length: 0))
     if lastRange.length == 0 {
-      resultingLines.append((range: lastRange, info: nil))
+      starts.append(lastRange.location)
+      infos.append(nil)
     }
+    
+    // Always add the total length as a sentinel
+    starts.append(nsString.length)
 
-    return resultingLines
+    return (starts: starts, infos: infos)
   }
 
-  /// Extend the `range` by one character, clipped by the `stringRange`, but such that a zero length range after the
-  /// end of the string is preserved.
-  ///
   private func extend(range: NSRange, clippingTo stringRange: NSRange) -> NSRange {
     return
       range.location == stringRange.max

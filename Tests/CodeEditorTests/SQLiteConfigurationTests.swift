@@ -29,7 +29,7 @@ struct SQLiteNumberTokenisingTests {
     let attributedStringNumber = NSAttributedString(string: number)
     codeStorage.setAttributedString(attributedStringNumber)  // this triggers tokenisation
     let lineMap = codeStorageDelegate.lineMap
-    #expect(lineMap.lines.count == 1)
+    #expect(lineMap.lineInfos.count == 1)
     
     let tokens = try #require(lineMap.lookup(line: 0)?.info?.tokens, "A token should be found")
     #expect(tokens.count == 1, "A single token should be found")
@@ -71,7 +71,7 @@ struct SQLiteIdentifierTokenisingTests {
     let attributedStringValue = NSAttributedString(string: text)
     codeStorage.setAttributedString(attributedStringValue)  // this triggers tokenisation
     let lineMap = codeStorageDelegate.lineMap
-    #expect(lineMap.lines.count == 1)
+    #expect(lineMap.lineInfos.count == 1)
     
     let tokens = try #require(lineMap.lookup(line: 0)?.info?.tokens, "A token should be found")
     #expect(tokens.count == 1, "A single token should be found")
@@ -88,7 +88,7 @@ struct SQLiteIdentifierTokenisingTests {
     let attributedStringValue = NSAttributedString(string: text)
     codeStorage.setAttributedString(attributedStringValue)  // this triggers tokenisation
     let lineMap = codeStorageDelegate.lineMap
-    #expect(lineMap.lines.count == 1)
+    #expect(lineMap.lineInfos.count == 1)
     
     let tokens = try #require(lineMap.lookup(line: 0)?.info?.tokens, "Tokens should be found")
     #expect(tokens.count > 1, "Multiple tokens should be found")
@@ -130,7 +130,7 @@ struct SQLiteStringTokenisingTests {
     let attributedStringValue = NSAttributedString(string: text)
     codeStorage.setAttributedString(attributedStringValue)  // this triggers tokenisation
     let lineMap = codeStorageDelegate.lineMap
-    #expect(lineMap.lines.count == 1)
+    #expect(lineMap.lineInfos.count == 1)
     
     let tokens = try #require(lineMap.lookup(line: 0)?.info?.tokens, "A token should be found")
     #expect(tokens.count == 1, "A single token should be found")

@@ -25,18 +25,56 @@ typealias EditActions = NSTextStorageEditActions
 // MARK: -
 // MARK: `NSTextStorage` subclass
 
+/// Protocol for custom syntax highlighters that can request editor refresh.
+/// When set on CodeView, this replaces the default token-based highlighting.
+public protocol CodeHighlighter: AnyObject {
+    /// Called by the editor to apply highlighting to a range of text.
+    /// - Parameters:
+    ///   - text: The full text content of the document.
+    ///   - range: The range to highlight (typically the visible range being rendered).
+    ///   - layoutManager: The layout manager on which to set rendering attributes.
+    func highlight(text: String, range: NSRange, layoutManager: NSTextLayoutManager)
+
+    /// Called by the editor when text is edited.
+    /// - Parameters:
+    ///   - range: The character range of text being replaced.
+    ///   - delta: The change in character length (positive for additions, negative for deletions).
+    func textEdited(range: NSRange, delta: Int)
+
+    /// Callback set by the editor. Call this when the highlighter's cache updates
+    /// and the editor needs to refresh its display.
+    var onNeedsRefresh: (() -> Void)? { get set }
+}
+
 // `NSTextStorage` is a class cluster; hence, we realise our subclass by decorating an embeded vanilla text storage.
 class CodeStorage: NSTextStorage {
 
   fileprivate let textStorage: NSTextStorage = NSTextStorage()
 
-  var theme: Theme
+  var theme: Theme {
+    didSet {
+      // Rebuild cached attributes when theme changes
+      defaultHighlightingAttrs = [.foregroundColor: theme.textColour, .hideInvisibles: ()]
+    }
+  }
+
+  /// Protocol-based highlighter that supports refresh callbacks.
+  /// When set, this replaces the default token-based highlighting.
+  public weak var codeHighlighter: CodeHighlighter?
+
+  /// Counter incremented on each edit, used for efficient cache invalidation.
+  /// Highlighters can compare this against a cached value instead of computing expensive text hashes.
+  public private(set) var editGeneration: UInt64 = 0
+
+  /// Pre-computed default highlighting attributes (avoids dictionary allocation per highlight call).
+  private var defaultHighlightingAttrs: [NSAttributedString.Key: Any]
   
 
   // MARK: Initialisers
 
   init(theme: Theme) {
     self.theme = theme
+    self.defaultHighlightingAttrs = [.foregroundColor: theme.textColour, .hideInvisibles: ()]
     super.init()
   }
 
@@ -68,8 +106,10 @@ class CodeStorage: NSTextStorage {
 
   // Extended to handle auto-deletion of adjacent matching brackets
   override func replaceCharacters(in range: NSRange, with str: String) {
-
+    let delta = (str as NSString).length - range.length
     beginEditing()
+    editGeneration &+= 1  // Overflow-safe increment for cache invalidation
+    codeHighlighter?.textEdited(range: range, delta: delta)
 
     // We are deleting one character => check whether it is a one-character bracket and if so also delete its matching
     // bracket if it is directly adjacent
@@ -162,17 +202,23 @@ extension CodeStorage {
       guard let contentStorage = layoutManager.textContentManager as? NSTextContentStorage
       else { return }
 
-      if let textRange = contentStorage.textRange(for: range) {
-        layoutManager.setRenderingAttributes([.foregroundColor: theme.textColour, .hideInvisibles: ()],
-                                             for: textRange)
-      }
-      enumerateTokens(in: range) { lineToken in
+      // Use custom highlighter if provided, otherwise use token-based highlighting
+      if let codeHighlighter {
+        // Custom highlighter is responsible for setting all colors including defaults
+        codeHighlighter.highlight(text: string, range: range, layoutManager: layoutManager)
+      } else {
+        // Apply default text color as base for token-based highlighting
+        if let textRange = contentStorage.textRange(for: range) {
+          layoutManager.setRenderingAttributes(defaultHighlightingAttrs, for: textRange)
+        }
+        enumerateTokens(in: range) { lineToken in
 
-        if let documentRange = lineToken.range.intersection(range),
-           let textRange     = contentStorage.textRange(for: documentRange)
-        {
-          let colour = colour(for: lineToken)
-          layoutManager.setRenderingAttributes([.foregroundColor: colour], for: textRange)
+          if let documentRange = lineToken.range.intersection(range),
+             let textRange     = contentStorage.textRange(for: documentRange)
+          {
+            let colour = colour(for: lineToken)
+            layoutManager.setRenderingAttributes([.foregroundColor: colour], for: textRange)
+          }
         }
       }
   }
@@ -367,20 +413,21 @@ extension CodeStorage {
           let startLine = lineMap.lineContaining(index: location)
     else { return }
 
-    let firstLine = lineMap.lines[startLine]
-    if let info = firstLine.info {
+    let firstLine = lineMap.lookup(line: startLine)
+    if let info = firstLine?.info {
 
       let doContinue = enumerate(tokens: info.tokens,
                                  commentRanges: info.commentRanges,
-                                 lineStart: firstLine.range.location,
-                                 startLocation: location - firstLine.range.location)
+                                 lineStart: firstLine!.range.location,
+                                 startLocation: location - firstLine!.range.location)
       if !doContinue { return }
 
     }
 
-    for line in lineMap.lines[startLine + 1 ..< lineMap.lines.count] {
+    for lineNr in startLine + 1 ..< lineMap.lineInfos.count {
 
-      if let info = line.info {
+      if let line = lineMap.lookup(line: lineNr),
+         let info = line.info {
 
         let doContinue = enumerate(tokens: info.tokens,
                                    commentRanges: info.commentRanges,
@@ -520,5 +567,17 @@ class CodeContentStorage: NSTextContentStorage {
         }
       }
     }
+  }
+}
+
+// MARK: - Public API for cache invalidation
+
+public extension NSTextContentStorage {
+  /// Returns the edit generation counter for efficient cache invalidation.
+  /// This counter is incremented on each text edit, allowing highlighters to
+  /// check if content changed without computing expensive text hashes.
+  /// Returns nil if the underlying text storage is not a CodeStorage.
+  var editGeneration: UInt64? {
+    (textStorage as? CodeStorage)?.editGeneration
   }
 }

@@ -11,7 +11,10 @@ final class LineMapTests: XCTestCase {
 
   func hasLineMap(_ string: String, _ lineMap: LineMap<Void>) {
     let computedLineMap = LineMap<Void>(string: string)
-    XCTAssertEqual(computedLineMap.lines.map{ $0.range }, lineMap.lines.map{ $0.range })
+    XCTAssertEqual(computedLineMap.lineInfos.count, lineMap.lineInfos.count)
+    for i in 0..<computedLineMap.lineInfos.count {
+      XCTAssertEqual(computedLineMap.lookup(line: i)?.range, lineMap.lookup(line: i)?.range)
+    }
   }
 
   func testInitEmpty() {

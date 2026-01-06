@@ -15,7 +15,7 @@ extension NSTextContentStorage {
   /// - Parameter textLocation: The text location to convert.
   /// - Returns: The corresponding character position in the underlying text storage.
   ///
-  func location(for textLocation: NSTextLocation) -> Int {
+  public func location(for textLocation: NSTextLocation) -> Int {
     offset(from: documentRange.location, to: textLocation)
   }
   
@@ -24,7 +24,7 @@ extension NSTextContentStorage {
   /// - Parameter location: The character location to convert.
   /// - Returns: The corresponding text location.
   /// 
-  func textLocation(for location: Int) -> NSTextLocation? {
+  public func textLocation(for location: Int) -> NSTextLocation? {
     self.location(documentRange.location, offsetBy: location)
   }
 
@@ -33,7 +33,7 @@ extension NSTextContentStorage {
   /// - Parameter textRange: The text range to convert.
   /// - Returns: The corresponding character range in the underlying text storage.
   ///
-  func range(for textRange: NSTextRange) -> NSRange {
+  public func range(for textRange: NSTextRange) -> NSRange {
     NSRange(location: offset(from: documentRange.location, to: textRange.location),
             length: offset(from: textRange.location, to: textRange.endLocation))
   }
@@ -44,7 +44,7 @@ extension NSTextContentStorage {
   /// - Returns: The corresponding text range in the underlying text storage if there exists a corresponding valid text
   ///     range.
   ///
-  func textRange(for range: NSRange) -> NSTextRange? {
+  public func textRange(for range: NSRange) -> NSTextRange? {
     // NB: `NSTextRange(location:end:)` crashes if `end` is before `start` (instead of returning `nil`).
     guard range.length >= 0 else { return nil }
 
