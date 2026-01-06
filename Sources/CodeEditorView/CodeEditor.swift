@@ -640,6 +640,7 @@ extension CodeEditor: UIViewRepresentable {
                             theme: context.environment.codeEditorTheme,
                             setText: setText(_:),
                             setMessages: { context.coordinator.messages = $0 })
+    codeView.keyboardDismissMode = .interactive
 
     // NB: We are not setting `codeView.text` here. That will happen via `updateUIView(:)`.
     // This implies that we must take care to not report that initial updates as a change to any connected language
