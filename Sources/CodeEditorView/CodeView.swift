@@ -1166,6 +1166,7 @@ final class CodeView: NSTextView {
   /// Determines if the given character should trigger typeover behavior.
   /// Returns true if the character is a closing bracket and the same character exists at the current cursor position.
   private func shouldTypeOver(character: Character) -> Bool {
+    guard let codeStorage = optCodeStorage else { return false }
     let cursorLocation = selectedRange().location
     return codeStorageDelegate.shouldTypeover(for: codeStorage, at: cursorLocation, inserting: String(character)) != nil
   }
