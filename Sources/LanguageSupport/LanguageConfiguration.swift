@@ -489,7 +489,7 @@ extension LanguageConfiguration {
 
     // Populate the token dictionary for the code state (tokenising plain code)
     //
-    var codeTokens: [TokenDescription] = []
+    var codeTokens: [TokenDescription<Token, State>] = []
     if supportsRoundBrackets {
       codeTokens.append(contentsOf:
                           [ TokenDescription(regex: /\(/, singleLexeme: "(", action: token(.roundBracketOpen))
