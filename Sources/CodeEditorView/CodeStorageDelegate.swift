@@ -823,6 +823,18 @@ extension CodeStorageDelegate {
        (currentToken.token == .roundBracketOpen || currentToken.token == .squareBracketOpen),
        let closingLexeme = matchingLexemeForOpeningBracket(currentToken.token)
     {
+      // Check if there's a pending delayed token that also needs completion
+      // This handles cases like: type "{" then "(" should produce "{()}"
+      if let previousToken = lastTypedToken,
+         previousToken.range.max == index,
+         let pendingClosingLexeme = matchingLexemeForOpeningBracket(previousToken.token)
+      {
+        let completingString = closingLexeme + pendingClosingLexeme
+        codeStorage.replaceCharacters(in: NSRange(location: index + 1, length: 0), with: completingString)
+        lastTypedToken = nil
+        return completingString.utf16.count
+      }
+
       codeStorage.replaceCharacters(in: NSRange(location: index + 1, length: 0), with: closingLexeme)
       lastTypedToken = nil  // Clear to prevent further completion based on this token
       return closingLexeme.utf16.count
