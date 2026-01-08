@@ -607,6 +607,7 @@ extension CodeEditor {
 extension EnvironmentValues {
 
   @Entry public var codeEditorPasteHandler: CodeEditor.PasteHandler = .none
+  @Entry public var codeEditorAutoCharacterHandler: AutoCharacterHandler? = nil
 }
 
 
@@ -721,6 +722,7 @@ extension CodeEditor: UIViewRepresentable {
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
     codeView.codeHighlighter = context.environment.codeEditorHighlighter
     codeView.pasteHandler = context.environment.codeEditorPasteHandler
+    codeView.autoCharacterHandler = context.environment.codeEditorAutoCharacterHandler
     if refreshTrigger != context.coordinator.lastRefreshTrigger {
       context.coordinator.lastRefreshTrigger = refreshTrigger
       codeView.forceRedrawHighlighting()
@@ -936,6 +938,7 @@ extension CodeEditor: NSViewRepresentable {
     if indentationConfiguration != codeView.indentation { codeView.indentation = indentationConfiguration }
     codeView.codeHighlighter = context.environment.codeEditorHighlighter
     codeView.pasteHandler = context.environment.codeEditorPasteHandler
+    codeView.autoCharacterHandler = context.environment.codeEditorAutoCharacterHandler
     if refreshTrigger != context.coordinator.lastRefreshTrigger {
       context.coordinator.lastRefreshTrigger = refreshTrigger
       codeView.forceRedrawHighlighting()
