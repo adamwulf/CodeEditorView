@@ -528,40 +528,59 @@ final class AutoBracketTests: XCTestCase {
   }
 
   func testCurlyBracketAutoInsertionWithAutoIndentation() throws {
-    // Test curly bracket completion when auto-indentation adds multiple characters
-    // This simulates pressing Enter after `{` when the system adds newline + indentation
+    // WHAT THIS TESTS:
+    // Tests that CodeStorageDelegate.willProcessEditing correctly handles delayed curly bracket
+    // completion when the edit is a multi-character insertion (delta > 1) containing a newline.
+    // This exercises the fix for the case where pressing Enter after `{` inserts newline + indentation
+    // as a single edit operation, which previously bypassed tokenCompletion entirely.
+    //
+    // WHAT THIS DOES NOT TEST:
+    // - The actual CodeView key handling that triggers on Enter key press
+    // - The indentation calculation logic in CodeEditing.swift (predictedIndentation)
+    // - The full UI path from keypress to text insertion
+    // These require a full CodeView instance which unit tests don't have access to.
+    // The multi-character "\n  " is manually constructed here to simulate what CodeEditing
+    // produces via: codeStorage.replaceCharacters(in: range, with: "\n" + indentString)
+
     let (codeStorage, _) = makeCodeStorage()
 
     // Start with "if "
     codeStorage.setAttributedString(NSAttributedString(string: "if "))
     XCTAssertEqual(codeStorage.string, "if ")
 
-    // Type "{" at position 3 - delayed
+    // Type "{" at position 3 - delayed completion stores token in lastTypedToken
     codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "{")
     XCTAssertEqual(codeStorage.string, "if {")
 
-    // Simulate auto-indentation: insert newline + 2 spaces (3 characters total)
-    // This is what happens when pressing Enter and the system adds indentation
+    // Simulate what CodeEditing does on Enter: insert newline + indentation as single edit
+    // This triggers the multi-character handling path in willProcessEditing
     codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "\n  ")
     // Should auto-insert "\n}" after the indentation (no extra indent since opening line has none)
     XCTAssertEqual(codeStorage.string, "if {\n  \n}")
   }
 
   func testCurlyBracketAutoInsertionWithNestedIndentation() throws {
-    // Test that closing bracket matches indentation of the line with opening bracket
+    // WHAT THIS TESTS:
+    // Tests that the closing bracket's indentation matches the line where the opening `{` was typed,
+    // not the inner indentation level. This ensures proper formatting for nested blocks.
+    //
+    // WHAT THIS DOES NOT TEST:
+    // - Same limitations as testCurlyBracketAutoInsertionWithAutoIndentation above.
+    // - The actual indentation values are hardcoded rather than calculated by CodeEditing.
+
     let (codeStorage, _) = makeCodeStorage()
 
     // Start with indented code: "  if "
     codeStorage.setAttributedString(NSAttributedString(string: "  if "))
     XCTAssertEqual(codeStorage.string, "  if ")
 
-    // Type "{" at position 5 - delayed
+    // Type "{" at position 5 - delayed completion stores token in lastTypedToken
     codeStorage.replaceCharacters(in: NSRange(location: 5, length: 0), with: "{")
     XCTAssertEqual(codeStorage.string, "  if {")
 
-    // Simulate auto-indentation: insert newline + 4 spaces (inner indentation)
+    // Simulate Enter with inner indentation (4 spaces, one level deeper than opening line's 2 spaces)
     codeStorage.replaceCharacters(in: NSRange(location: 6, length: 0), with: "\n    ")
-    // Should auto-insert "\n  }" - matching the 2-space indent of the opening line
+    // Should auto-insert "\n  }" - matching the 2-space indent of the opening line, not 4
     XCTAssertEqual(codeStorage.string, "  if {\n    \n  }")
   }
 
