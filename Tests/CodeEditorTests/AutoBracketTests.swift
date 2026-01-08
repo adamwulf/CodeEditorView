@@ -239,9 +239,10 @@ final class AutoBracketTests: XCTestCase {
     codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "[")
     XCTAssertEqual(codeStorage.string, "arr[")
 
-    // Type "(" at position 4 - should auto-insert "])" for both pending brackets
+    // Type "(" at position 4 - should auto-insert ")]" for both pending brackets
+    // Result is properly nested: [ ( ) ]
     codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "(")
-    XCTAssertEqual(codeStorage.string, "arr[(])")
+    XCTAssertEqual(codeStorage.string, "arr[()]")
   }
 
   static var allTests = [
