@@ -385,6 +385,117 @@ final class AutoBracketTests: XCTestCase {
     XCTAssertEqual(codeStorage.string, "([{ ")
   }
 
+  // MARK: - Typeover Tests
+
+  func testTypeoverForRoundBracket() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up text with cursor before closing bracket: "func(|)"
+    codeStorage.setAttributedString(NSAttributedString(string: "func()"))
+
+    // Should typeover when typing ")" at position 5 (before existing ")")
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: ")")
+    XCTAssertEqual(result, 1, "Should return 1 to skip the closing bracket")
+  }
+
+  func testTypeoverForSquareBracket() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up text: "arr[0|]"
+    codeStorage.setAttributedString(NSAttributedString(string: "arr[0]"))
+
+    // Should typeover when typing "]" at position 5 (before existing "]")
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: "]")
+    XCTAssertEqual(result, 1, "Should return 1 to skip the closing bracket")
+  }
+
+  func testTypeoverForCurlyBracket() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up text: "if {|}"
+    codeStorage.setAttributedString(NSAttributedString(string: "if {}"))
+
+    // Should typeover when typing "}" at position 4 (before existing "}")
+    let result = delegate.shouldTypeover(for: codeStorage, at: 4, inserting: "}")
+    XCTAssertEqual(result, 1, "Should return 1 to skip the closing bracket")
+  }
+
+  func testNoTypeoverWhenCharacterDoesNotMatch() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up text: "func(|x)"
+    codeStorage.setAttributedString(NSAttributedString(string: "func(x)"))
+
+    // Should NOT typeover when typing ")" at position 5 (before "x", not ")")
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: ")")
+    XCTAssertNil(result, "Should return nil when character doesn't match")
+  }
+
+  func testNoTypeoverAtEndOfDocument() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up text: "func("
+    codeStorage.setAttributedString(NSAttributedString(string: "func("))
+
+    // Should NOT typeover when at end of document
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: ")")
+    XCTAssertNil(result, "Should return nil when at end of document")
+  }
+
+  func testNoTypeoverForOpeningBracket() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up text: "(()"
+    codeStorage.setAttributedString(NSAttributedString(string: "(()"))
+
+    // Should NOT typeover for opening brackets
+    let result = delegate.shouldTypeover(for: codeStorage, at: 0, inserting: "(")
+    XCTAssertNil(result, "Should return nil for opening brackets")
+  }
+
+  func testNoTypeoverForMultipleCharacters() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up text: "func()"
+    codeStorage.setAttributedString(NSAttributedString(string: "func()"))
+
+    // Should NOT typeover when inserting multiple characters
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: "))")
+    XCTAssertNil(result, "Should return nil for multi-character insertions")
+  }
+
+  func testNoTypeoverWhenBracketsDisabled() throws {
+    // Create config with round brackets disabled
+    let config = LanguageConfiguration(
+      name: "NoParens",
+      supportsSquareBrackets: true,
+      supportsCurlyBrackets: true,
+      supportsRoundBrackets: false,
+      stringRegex: nil,
+      characterRegex: nil,
+      numberRegex: nil,
+      singleLineComment: "//",
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: []
+    )
+    let (codeStorage, delegate) = makeCodeStorage(with: config)
+
+    // Set up text: "func()"
+    codeStorage.setAttributedString(NSAttributedString(string: "func()"))
+
+    // Should NOT typeover ")" when round brackets are disabled
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: ")")
+    XCTAssertNil(result, "Should return nil when round brackets are disabled")
+
+    // But should still typeover "]" since square brackets are enabled
+    codeStorage.setAttributedString(NSAttributedString(string: "arr[]"))
+    let squareResult = delegate.shouldTypeover(for: codeStorage, at: 4, inserting: "]")
+    XCTAssertEqual(squareResult, 1, "Should typeover for enabled bracket types")
+  }
+
   static var allTests = [
     // Auto-insertion tests
     ("testRoundBracketAutoInsertion", testRoundBracketAutoInsertion),
@@ -410,5 +521,14 @@ final class AutoBracketTests: XCTestCase {
     ("testNoAutoInsertionWhenSquareBracketsDisabled", testNoAutoInsertionWhenSquareBracketsDisabled),
     ("testNoAutoInsertionWhenCurlyBracketsDisabled", testNoAutoInsertionWhenCurlyBracketsDisabled),
     ("testNoAutoInsertionWithNoneConfiguration", testNoAutoInsertionWithNoneConfiguration),
+    // Typeover tests
+    ("testTypeoverForRoundBracket", testTypeoverForRoundBracket),
+    ("testTypeoverForSquareBracket", testTypeoverForSquareBracket),
+    ("testTypeoverForCurlyBracket", testTypeoverForCurlyBracket),
+    ("testNoTypeoverWhenCharacterDoesNotMatch", testNoTypeoverWhenCharacterDoesNotMatch),
+    ("testNoTypeoverAtEndOfDocument", testNoTypeoverAtEndOfDocument),
+    ("testNoTypeoverForOpeningBracket", testNoTypeoverForOpeningBracket),
+    ("testNoTypeoverForMultipleCharacters", testNoTypeoverForMultipleCharacters),
+    ("testNoTypeoverWhenBracketsDisabled", testNoTypeoverWhenBracketsDisabled),
   ]
 }

@@ -870,6 +870,46 @@ extension CodeStorageDelegate {
     lastTypedToken = nil
     return closingLexeme.utf16.count
   }
+
+  /// Determines if the given character should trigger typeover behavior at the specified location.
+  ///
+  /// Typeover means moving the cursor forward past an existing character instead of inserting a duplicate.
+  /// This is used when the user types a closing bracket that was auto-inserted.
+  ///
+  /// - Parameters:
+  ///   - codeStorage: The code storage containing the text.
+  ///   - location: The cursor location where the character would be inserted.
+  ///   - text: The text being inserted (typically a single character).
+  /// - Returns: The number of characters to skip (typeover), or `nil` if normal insertion should occur.
+  ///
+  func shouldTypeover(for codeStorage: CodeStorage, at location: Int, inserting text: String) -> Int? {
+    // Only handle single character insertions
+    guard text.count == 1, let char = text.first else { return nil }
+
+    // Check if it's a closing bracket that we handle
+    let closingBrackets: [(char: Character, enabled: Bool)] = [
+      (")", language.supportsRoundBrackets),
+      ("]", language.supportsSquareBrackets),
+      ("}", language.supportsCurlyBrackets)
+    ]
+
+    guard let bracket = closingBrackets.first(where: { $0.char == char }),
+          bracket.enabled else { return nil }
+
+    // Check bounds
+    let string = codeStorage.string
+    guard location < string.utf16.count else { return nil }
+
+    // Check if the character at cursor position matches
+    let nsString = string as NSString
+    let charAtCursor = nsString.character(at: location)
+
+    if charAtCursor == char.utf16.first {
+      return 1  // Skip 1 character
+    }
+
+    return nil
+  }
 }
 
 

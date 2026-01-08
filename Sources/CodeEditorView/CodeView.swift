@@ -531,19 +531,13 @@ final class CodeViewDelegate: NSObject, UITextViewDelegate {
       }
     }
 
-    // Default typeover behavior for closing brackets
-    let closingBrackets: Set<Character> = [")", "]", "}"]
-    if closingBrackets.contains(char),
-       cursorLocation < (textView.text as NSString).length
-    {
-      let charAtCursor = (textView.text as NSString).character(at: cursorLocation)
-      if charAtCursor == char.utf16.first {
-        // Move cursor forward instead of inserting
-        if let newPosition = textView.position(from: textView.beginningOfDocument, offset: cursorLocation + 1) {
-          textView.selectedTextRange = textView.textRange(from: newPosition, to: newPosition)
-        }
-        return false
+    // Default typeover behavior for closing brackets - delegate to CodeStorageDelegate
+    if let skip = codeView.codeStorageDelegate.shouldTypeover(for: codeView.codeStorage, at: cursorLocation, inserting: text) {
+      // Move cursor forward instead of inserting
+      if let newPosition = textView.position(from: textView.beginningOfDocument, offset: cursorLocation + skip) {
+        textView.selectedTextRange = textView.textRange(from: newPosition, to: newPosition)
       }
+      return false
     }
 
     return true  // Let normal insertion happen
@@ -1133,18 +1127,8 @@ final class CodeView: NSTextView {
   /// Determines if the given character should trigger typeover behavior.
   /// Returns true if the character is a closing bracket and the same character exists at the current cursor position.
   private func shouldTypeOver(character: Character) -> Bool {
-    let closingBrackets: Set<Character> = [")", "]", "}"]
-
-    guard closingBrackets.contains(character) else { return false }
-
     let cursorLocation = selectedRange().location
-    guard cursorLocation < string.utf16.count else { return false }
-
-    // Check if the character at cursor position matches
-    let nsString = string as NSString
-    let charAtCursor = nsString.character(at: cursorLocation)
-
-    return charAtCursor == character.utf16.first
+    return codeStorageDelegate.shouldTypeover(for: codeStorage, at: cursorLocation, inserting: String(character)) != nil
   }
 }
 
