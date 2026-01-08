@@ -56,6 +56,10 @@ final class AutoCharacterHandlerTests: XCTestCase {
     // Type * in empty text → should insert with closing
     let action = markdownAutoCharacterHandler(typed: "*", location: 0, text: "")
     XCTAssertEqual(action, .insertWithClosing("*"))
+    // Note: This test verifies the handler returns the correct action, but does NOT test
+    // that CodeView correctly positions the cursor between the typed character and the
+    // closing string. Cursor positioning is handled in CodeView.insertText() and would
+    // require integration testing with a real CodeView instance to verify.
   }
 
   func testTypeoverAction() {

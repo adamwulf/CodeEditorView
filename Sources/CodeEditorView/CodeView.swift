@@ -1135,10 +1135,12 @@ final class CodeView: NSTextView {
       case .insertWithClosing(let closing):
         // Insert the typed character normally
         super.insertText(string, replacementRange: replacementRange)
-        // Then insert the closing string after cursor (without moving cursor)
+        // Then insert the closing string after cursor
         let newCursorLocation = selectedRange().location
         if let textStorage = textStorage {
           textStorage.insert(NSAttributedString(string: closing), at: newCursorLocation)
+          // Restore cursor position between typed char and closing
+          setSelectedRange(NSRange(location: newCursorLocation, length: 0))
         }
         return
 
