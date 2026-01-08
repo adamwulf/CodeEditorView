@@ -442,6 +442,32 @@ final class CodeViewDelegate: NSObject, UITextViewDelegate {
     codeView.gutterView?.invalidateGutter()
     codeView.adjustScrollPositionOfMinimap()
   }
+
+  func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+    // Typeover: When typing a closing bracket, if the same character is already at the cursor position,
+    // move the cursor past it instead of inserting a duplicate.
+    guard textView is CodeView,
+          text.count == 1,
+          let char = text.first,
+          range.length == 0  // Only for insertions, not replacements
+    else { return true }
+
+    let closingBrackets: Set<Character> = [")", "]", "}"]
+    guard closingBrackets.contains(char) else { return true }
+
+    let cursorLocation = range.location
+    guard cursorLocation < (textView.text as NSString).length else { return true }
+
+    // Check if the character at cursor position matches
+    let charAtCursor = (textView.text as NSString).character(at: cursorLocation)
+    guard charAtCursor == char.utf16.first else { return true }
+
+    // Move cursor forward instead of inserting
+    if let newPosition = textView.position(from: textView.beginningOfDocument, offset: cursorLocation + 1) {
+      textView.selectedTextRange = textView.textRange(from: newPosition, to: newPosition)
+    }
+    return false  // Don't insert the character
+  }
 }
 
 /// Custom view for background highlights.
@@ -970,6 +996,40 @@ final class CodeView: NSTextView {
     if case .notHandled = result {
       super.paste(sender)
     }
+  }
+
+  override func insertText(_ string: Any, replacementRange: NSRange) {
+    // Typeover: When typing a closing bracket, if the same character is already at the cursor position,
+    // move the cursor past it instead of inserting a duplicate.
+    if let str = string as? String,
+       str.count == 1,
+       let char = str.first,
+       shouldTypeOver(character: char)
+    {
+      // Move cursor forward instead of inserting
+      let newLocation = selectedRange().location + 1
+      setSelectedRange(NSRange(location: newLocation, length: 0))
+      return
+    }
+
+    super.insertText(string, replacementRange: replacementRange)
+  }
+
+  /// Determines if the given character should trigger typeover behavior.
+  /// Returns true if the character is a closing bracket and the same character exists at the current cursor position.
+  private func shouldTypeOver(character: Character) -> Bool {
+    let closingBrackets: Set<Character> = [")", "]", "}"]
+
+    guard closingBrackets.contains(character) else { return false }
+
+    let cursorLocation = selectedRange().location
+    guard cursorLocation < string.utf16.count else { return false }
+
+    // Check if the character at cursor position matches
+    let nsString = string as NSString
+    let charAtCursor = nsString.character(at: cursorLocation)
+
+    return charAtCursor == character.utf16.first
   }
 }
 

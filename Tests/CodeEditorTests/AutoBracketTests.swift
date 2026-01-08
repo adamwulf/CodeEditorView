@@ -30,11 +30,11 @@ final class AutoBracketTests: XCTestCase {
     codeStorage.setAttributedString(NSAttributedString(string: "func"))
     XCTAssertEqual(codeStorage.string, "func")
 
-    // Type "(" at position 4
+    // Type "(" at position 4 - immediately inserts ")" too
     codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "(")
-    XCTAssertEqual(codeStorage.string, "func(")
+    XCTAssertEqual(codeStorage.string, "func()")
 
-    // Type "x" at position 5 - this should trigger auto-insertion of ")"
+    // Type "x" at position 5 (between the brackets)
     codeStorage.replaceCharacters(in: NSRange(location: 5, length: 0), with: "x")
     XCTAssertEqual(codeStorage.string, "func(x)")
   }
@@ -46,11 +46,11 @@ final class AutoBracketTests: XCTestCase {
     codeStorage.setAttributedString(NSAttributedString(string: "arr"))
     XCTAssertEqual(codeStorage.string, "arr")
 
-    // Type "[" at position 3
+    // Type "[" at position 3 - immediately inserts "]" too
     codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "[")
-    XCTAssertEqual(codeStorage.string, "arr[")
+    XCTAssertEqual(codeStorage.string, "arr[]")
 
-    // Type "0" at position 4 - this should trigger auto-insertion of "]"
+    // Type "0" at position 4 (between the brackets)
     codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "0")
     XCTAssertEqual(codeStorage.string, "arr[0]")
   }
@@ -111,11 +111,12 @@ final class AutoBracketTests: XCTestCase {
     // Start with "func"
     codeStorage.setAttributedString(NSAttributedString(string: "func"))
 
-    // Type "(" at position 4
+    // Type "(" at position 4 - immediately inserts ")" too
     codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "(")
-    XCTAssertEqual(codeStorage.string, "func(")
+    XCTAssertEqual(codeStorage.string, "func()")
 
-    // Type "(" again at position 5 - should auto-insert "))" for both
+    // Type "(" again at position 5 (between the brackets) - immediately inserts another "()"
+    // The outer ) gets pushed, resulting in properly nested brackets
     codeStorage.replaceCharacters(in: NSRange(location: 5, length: 0), with: "(")
     XCTAssertEqual(codeStorage.string, "func(())")
   }
@@ -126,13 +127,15 @@ final class AutoBracketTests: XCTestCase {
     // Start with "func"
     codeStorage.setAttributedString(NSAttributedString(string: "func"))
 
-    // Type "(" at position 4
+    // Type "(" at position 4 - immediately inserts ")" too
     codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "(")
-    XCTAssertEqual(codeStorage.string, "func(")
-
-    // Type ")" at position 5 - should NOT auto-insert another ")"
-    codeStorage.replaceCharacters(in: NSRange(location: 5, length: 0), with: ")")
     XCTAssertEqual(codeStorage.string, "func()")
+
+    // Type ")" at position 5 - this is where cursor would be, directly before the ")"
+    // In the full editor, typeover would move cursor past the ")".
+    // At the CodeStorage level, it just inserts another ")" (typeover is in CodeView).
+    codeStorage.replaceCharacters(in: NSRange(location: 5, length: 0), with: ")")
+    XCTAssertEqual(codeStorage.string, "func())")
   }
 
   func testCurlyBracketWithNewlineAutoInsertion() throws {
@@ -220,11 +223,11 @@ final class AutoBracketTests: XCTestCase {
     // Start with empty
     codeStorage.setAttributedString(NSAttributedString(string: ""))
 
-    // Type "(" at position 0
+    // Type "(" at position 0 - immediately inserts ")" too
     codeStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: "(")
-    XCTAssertEqual(codeStorage.string, "(")
+    XCTAssertEqual(codeStorage.string, "()")
 
-    // Type "x" at position 1 - should trigger auto-insertion
+    // Type "x" at position 1 (between the brackets)
     codeStorage.replaceCharacters(in: NSRange(location: 1, length: 0), with: "x")
     XCTAssertEqual(codeStorage.string, "(x)")
   }
@@ -235,14 +238,31 @@ final class AutoBracketTests: XCTestCase {
     // Start with "arr"
     codeStorage.setAttributedString(NSAttributedString(string: "arr"))
 
-    // Type "[" at position 3
+    // Type "[" at position 3 - immediately inserts "]" too
     codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "[")
-    XCTAssertEqual(codeStorage.string, "arr[")
+    XCTAssertEqual(codeStorage.string, "arr[]")
 
-    // Type "(" at position 4 - should auto-insert ")]" for both pending brackets
-    // Result is properly nested: [ ( ) ]
+    // Type "(" at position 4 (between "[" and "]") - immediately inserts "()"
+    // The "]" gets pushed, resulting in properly nested: [ ( ) ]
     codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "(")
     XCTAssertEqual(codeStorage.string, "arr[()]")
+  }
+
+  func testCurlyBracketWithImmediateBracketInside() throws {
+    let (codeStorage, _) = makeCodeStorage()
+
+    // Start with "if "
+    codeStorage.setAttributedString(NSAttributedString(string: "if "))
+
+    // Type "{" at position 3 - delayed, so no "}" yet
+    codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "{")
+    XCTAssertEqual(codeStorage.string, "if {")
+
+    // Type "(" at position 4 - this triggers both:
+    // - Immediate insertion of ")" for the "("
+    // - Delayed completion of "}" for the "{" (since it sees the previous "{")
+    codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "(")
+    XCTAssertEqual(codeStorage.string, "if {()}")
   }
 
   static var allTests = [
@@ -264,5 +284,6 @@ final class AutoBracketTests: XCTestCase {
     // Edge cases
     ("testAutoInsertionAtStartOfDocument", testAutoInsertionAtStartOfDocument),
     ("testAutoInsertionWithMultipleBracketTypes", testAutoInsertionWithMultipleBracketTypes),
+    ("testCurlyBracketWithImmediateBracketInside", testCurlyBracketWithImmediateBracketInside),
   ]
 }

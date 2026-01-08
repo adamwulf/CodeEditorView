@@ -769,7 +769,7 @@ extension CodeStorageDelegate {
 extension CodeStorageDelegate {
 
   /// Handle token completion actions after a single character was inserted.
-  /// 
+  ///
   /// - Parameters:
   ///   - codeStorage: The code storage where the edit action occured.
   ///   - index: The location within the text storage where the single character was inserted.
@@ -777,6 +777,9 @@ extension CodeStorageDelegate {
   ///
   /// This function only adds characters right after `index`. (This is crucial so that the caller knows where to adjust
   /// the line map and tokenisation.)
+  ///
+  /// For single-character opening brackets like `(`, `[`, `{`, the closing bracket is inserted immediately.
+  /// For multi-character opening brackets like `/*`, the closing bracket is inserted when the next character is typed.
   ///
   func tokenCompletion(for codeStorage: CodeStorage, at index: Int) -> Int {
 
@@ -791,91 +794,81 @@ extension CodeStorageDelegate {
       }
     }
 
-    /// Determine whether the ranges of the two tokens are overlapping.
-    ///
-    func overlapping(_ previousToken: LanguageConfiguration.Tokeniser.Token,
-                     _ currentToken: LanguageConfiguration.Tokeniser.Token?)
-    -> Bool
+    let currentTypedToken = codeStorage.tokenOnly(at: index)
+
+    // MARK: Immediate insertion for round and square brackets
+    // When typing `(` or `[`, immediately insert the matching closing bracket.
+    // Note: `{` uses delayed insertion (handled below) to preserve special newline behavior.
+    if let currentToken = currentTypedToken,
+       (currentToken.token == .roundBracketOpen || currentToken.token == .squareBracketOpen),
+       let closingLexeme = matchingLexemeForOpeningBracket(currentToken.token)
     {
-      if let currentToken = currentToken {
-        return NSIntersectionRange(previousToken.range, currentToken.range).length != 0
-      } else { return false }
+      codeStorage.replaceCharacters(in: NSRange(location: index + 1, length: 0), with: closingLexeme)
+      lastTypedToken = nil  // Clear to prevent further completion based on this token
+      return closingLexeme.utf16.count
     }
 
+    // MARK: Delayed completion for curly brackets and multi-character brackets
+    // Curly brackets `{` use delayed insertion to preserve special newline behavior.
+    // Multi-character brackets like `/*` require the next character to complete the token.
+    let previousTypedToken = lastTypedToken
+    lastTypedToken = currentTypedToken
+
+    guard let previousToken = previousTypedToken,
+          previousToken.range.max == index,
+          let closingLexeme = matchingLexemeForOpeningBracket(previousToken.token)
+    else { return 0 }
+
+    // Check for token overlap (e.g., "/" becoming part of "/*")
+    // If the current token overlaps with the previous, don't complete yet.
+    if let currentToken = currentTypedToken,
+       NSIntersectionRange(previousToken.range, currentToken.range).length != 0
+    {
+      return 0
+    }
 
     let string             = codeStorage.string,
         utf16View          = string.utf16,
         utf16Index         = utf16View.index(utf16View.startIndex, offsetBy: index),
-        char               = utf16View[utf16Index],
-        previousTypedToken = lastTypedToken,
-        currentTypedToken  = codeStorage.tokenOnly(at: index)
+        char               = utf16View[utf16Index]
 
-    lastTypedToken = currentTypedToken    // this is the default outcome, unless explicitly overridden below
+    // Special handling for curly brackets and nested comments with newlines
+    if previousToken.token == .curlyBracketOpen || previousToken.token == .nestedCommentOpen {
 
-    // The just entered character is right after the previous token and it doesn't belong to a token overlapping with
-    // the previous token
-    if let previousToken = previousTypedToken, previousToken.range.max == index,
-       !overlapping(previousToken, currentTypedToken) {
-
-      let completingString: String?
-
-      // If the previous token was an opening bracket, we may have to autocomplete by inserting a matching closing
-      // bracket
-      if let matchingPreviousLexeme = matchingLexemeForOpeningBracket(previousToken.token)
+      // If followed by a newline, add an extra newline before the closing bracket
+      if let unichar = Unicode.Scalar(char),
+         CharacterSet.newlines.contains(unichar)
       {
-
-        if let currentToken = currentTypedToken {
-
-          if currentToken.token == previousToken.token.matchingBracket {
-
-            // The current token is a matching closing bracket for the opening bracket of the last token => nothing to do
-            completingString = nil
-
-          } else if let matchingCurrentLexeme = matchingLexemeForOpeningBracket(currentToken.token) {
-
-            // The current token is another opening bracket => insert matching closing for the current and previous
-            // opening bracket
-            completingString = matchingCurrentLexeme + matchingPreviousLexeme
-
-          } else {
-
-            // Insertion of an unrelated or non-bracket token => just complete the previous opening bracket
-            completingString = matchingPreviousLexeme
-
-          }
-
-        } else {
-
-          // If a opening curly brace or nested comment bracket is followed by a line break, add another line break
-          // before the matching closing bracket.
-          if let unichar = Unicode.Scalar(char),
-             CharacterSet.newlines.contains(unichar),
-             previousToken.token == .curlyBracketOpen || previousToken.token == .nestedCommentOpen
-          {
-
-            // Insertion of a newline after a curly bracket => complete the previous opening bracket prefixed with an extra newline
-            completingString = String(unichar) + matchingPreviousLexeme
-
-          } else {
-
-          // Insertion of a character that doesn't complete a token => just complete the previous opening bracket
-          completingString = matchingPreviousLexeme
-
-          }
-        }
-
-      } else { completingString = nil }
-
-      // Insert completion, if any
-      if let string = completingString {
-
-        lastTypedToken = nil    // A completion renders the last token void
-        codeStorage.replaceCharacters(in: NSRange(location: index + 1, length: 0), with: string)
-
+        let completingString = String(unichar) + closingLexeme
+        codeStorage.replaceCharacters(in: NSRange(location: index + 1, length: 0), with: completingString)
+        lastTypedToken = nil
+        return completingString.utf16.count
       }
-      return completingString?.utf16.count ?? 0
 
-    } else { return 0 }
+      // If current token is a matching closing bracket, don't auto-insert
+      if let currentToken = currentTypedToken,
+         currentToken.token == previousToken.token.matchingBracket
+      {
+        return 0
+      }
+    }
+
+    // For curly brackets, check if the current token is another opening bracket
+    // In that case, insert both closing brackets
+    if previousToken.token == .curlyBracketOpen,
+       let currentToken = currentTypedToken,
+       let matchingCurrentLexeme = matchingLexemeForOpeningBracket(currentToken.token)
+    {
+      let completingString = matchingCurrentLexeme + closingLexeme
+      codeStorage.replaceCharacters(in: NSRange(location: index + 1, length: 0), with: completingString)
+      lastTypedToken = nil
+      return completingString.utf16.count
+    }
+
+    // Standard delayed completion
+    codeStorage.replaceCharacters(in: NSRange(location: index + 1, length: 0), with: closingLexeme)
+    lastTypedToken = nil
+    return closingLexeme.utf16.count
   }
 }
 
