@@ -20,6 +20,42 @@ private let logger = Logger(subsystem: "org.justtesting.CodeEditorView", categor
 
 
 // MARK: -
+// MARK: Auto-character handling
+
+/// Actions that can be returned by an auto-character handler.
+///
+/// Use this to implement language-specific auto-closing pairs (like `*` for markdown bold)
+/// or custom typeover behavior.
+///
+public enum AutoCharacterAction: Equatable {
+  /// Insert the typed character normally, then insert the closing string after the cursor.
+  /// For example, typing `*` with closing `*` produces `*|*` where `|` is the cursor.
+  case insertWithClosing(String)
+
+  /// Move the cursor forward by the specified count without inserting anything (typeover).
+  /// Use this when the typed character already exists at the cursor position.
+  case typeover(count: Int = 1)
+
+  /// Let the default behavior happen (normal insertion + built-in bracket handling).
+  case passthrough
+}
+
+/// A handler that can customize auto-character behavior for specific characters.
+///
+/// - Parameters:
+///   - typed: The character that was typed
+///   - location: The cursor location before the character is inserted
+///   - text: The current text content
+/// - Returns: An action to perform, or `nil` to use default behavior (same as `.passthrough`)
+///
+public typealias AutoCharacterHandler = (
+  _ typed: Character,
+  _ location: Int,
+  _ text: String
+) -> AutoCharacterAction?
+
+
+// MARK: -
 // MARK: Message info
 
 /// Information required to layout message views.
@@ -151,6 +187,10 @@ final class CodeView: UITextView {
   /// Optional paste handler for custom paste behavior.
   /// When set, this handler is called before standard paste processing.
   public var pasteHandler: CodeEditor.PasteHandler = .none
+
+  /// Optional handler for custom auto-character behavior.
+  /// Use this to implement language-specific auto-closing pairs (like `*` for markdown).
+  public var autoCharacterHandler: AutoCharacterHandler?
 
   /// Hook to propagate message sets upwards in the view hierarchy.
   ///
@@ -444,29 +484,69 @@ final class CodeViewDelegate: NSObject, UITextViewDelegate {
   }
 
   func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-    // Typeover: When typing a closing bracket, if the same character is already at the cursor position,
-    // move the cursor past it instead of inserting a duplicate.
-    guard textView is CodeView,
+    guard let codeView = textView as? CodeView,
           text.count == 1,
           let char = text.first,
           range.length == 0  // Only for insertions, not replacements
     else { return true }
 
-    let closingBrackets: Set<Character> = [")", "]", "}"]
-    guard closingBrackets.contains(char) else { return true }
-
     let cursorLocation = range.location
-    guard cursorLocation < (textView.text as NSString).length else { return true }
+    let currentText = textView.text ?? ""
 
-    // Check if the character at cursor position matches
-    let charAtCursor = (textView.text as NSString).character(at: cursorLocation)
-    guard charAtCursor == char.utf16.first else { return true }
+    // First, check for custom auto-character handler
+    if let handler = codeView.autoCharacterHandler,
+       let action = handler(char, cursorLocation, currentText)
+    {
+      switch action {
+      case .insertWithClosing(let closing):
+        // Insert the typed character
+        if let startPosition = textView.position(from: textView.beginningOfDocument, offset: cursorLocation),
+           let endPosition = textView.position(from: startPosition, offset: 0),
+           let textRange = textView.textRange(from: startPosition, to: endPosition)
+        {
+          textView.replace(textRange, withText: String(char))
+          // Now insert the closing string after cursor
+          let newCursorLocation = cursorLocation + 1
+          if let newStartPosition = textView.position(from: textView.beginningOfDocument, offset: newCursorLocation),
+             let newTextRange = textView.textRange(from: newStartPosition, to: newStartPosition)
+          {
+            textView.replace(newTextRange, withText: closing)
+            // Move cursor back between the typed char and closing
+            if let finalPosition = textView.position(from: textView.beginningOfDocument, offset: newCursorLocation) {
+              textView.selectedTextRange = textView.textRange(from: finalPosition, to: finalPosition)
+            }
+          }
+        }
+        return false
 
-    // Move cursor forward instead of inserting
-    if let newPosition = textView.position(from: textView.beginningOfDocument, offset: cursorLocation + 1) {
-      textView.selectedTextRange = textView.textRange(from: newPosition, to: newPosition)
+      case .typeover(let count):
+        // Move cursor forward without inserting
+        if let newPosition = textView.position(from: textView.beginningOfDocument, offset: cursorLocation + count) {
+          textView.selectedTextRange = textView.textRange(from: newPosition, to: newPosition)
+        }
+        return false
+
+      case .passthrough:
+        break  // Fall through to default behavior
+      }
     }
-    return false  // Don't insert the character
+
+    // Default typeover behavior for closing brackets
+    let closingBrackets: Set<Character> = [")", "]", "}"]
+    if closingBrackets.contains(char),
+       cursorLocation < (textView.text as NSString).length
+    {
+      let charAtCursor = (textView.text as NSString).character(at: cursorLocation)
+      if charAtCursor == char.utf16.first {
+        // Move cursor forward instead of inserting
+        if let newPosition = textView.position(from: textView.beginningOfDocument, offset: cursorLocation + 1) {
+          textView.selectedTextRange = textView.textRange(from: newPosition, to: newPosition)
+        }
+        return false
+      }
+    }
+
+    return true  // Let normal insertion happen
   }
 }
 
@@ -608,6 +688,10 @@ final class CodeView: NSTextView {
   /// Optional paste handler for custom paste behavior.
   /// When set, this handler is called before standard paste processing.
   public var pasteHandler: CodeEditor.PasteHandler = .none
+
+  /// Optional handler for custom auto-character behavior.
+  /// Use this to implement language-specific auto-closing pairs (like `*` for markdown).
+  public var autoCharacterHandler: AutoCharacterHandler?
 
   /// Hook to propagate message sets upwards in the view hierarchy.
   ///
@@ -999,15 +1083,46 @@ final class CodeView: NSTextView {
   }
 
   override func insertText(_ string: Any, replacementRange: NSRange) {
-    // Typeover: When typing a closing bracket, if the same character is already at the cursor position,
-    // move the cursor past it instead of inserting a duplicate.
-    if let str = string as? String,
-       str.count == 1,
-       let char = str.first,
-       shouldTypeOver(character: char)
+    guard let str = string as? String,
+          str.count == 1,
+          let char = str.first
+    else {
+      super.insertText(string, replacementRange: replacementRange)
+      return
+    }
+
+    let cursorLocation = selectedRange().location
+    let currentText = self.string
+
+    // First, check for custom auto-character handler
+    if let handler = autoCharacterHandler,
+       let action = handler(char, cursorLocation, currentText)
     {
-      // Move cursor forward instead of inserting
-      let newLocation = selectedRange().location + 1
+      switch action {
+      case .insertWithClosing(let closing):
+        // Insert the typed character normally
+        super.insertText(string, replacementRange: replacementRange)
+        // Then insert the closing string after cursor (without moving cursor)
+        let newCursorLocation = selectedRange().location
+        if let textStorage = textStorage {
+          textStorage.insert(NSAttributedString(string: closing), at: newCursorLocation)
+        }
+        return
+
+      case .typeover(let count):
+        // Move cursor forward without inserting
+        let newLocation = cursorLocation + count
+        setSelectedRange(NSRange(location: newLocation, length: 0))
+        return
+
+      case .passthrough:
+        break  // Fall through to default behavior
+      }
+    }
+
+    // Default typeover behavior for closing brackets
+    if shouldTypeOver(character: char) {
+      let newLocation = cursorLocation + 1
       setSelectedRange(NSRange(location: newLocation, length: 0))
       return
     }
