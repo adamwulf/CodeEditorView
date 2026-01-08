@@ -54,6 +54,31 @@ public typealias AutoCharacterHandler = (
   _ text: String
 ) -> AutoCharacterAction?
 
+/// A handler that can customize typeover behavior for specific characters.
+///
+/// This callback is invoked before the built-in bracket typeover logic.
+///
+/// - Parameters:
+///   - typed: The character that was typed
+///   - location: The cursor location before the character is inserted
+///   - text: The current text content
+/// - Returns: The number of characters to skip (typeover), or `nil` to fall through to built-in behavior
+///
+/// Example for markdown `*` typeover:
+/// ```swift
+/// codeView.typeoverHandler = { typed, location, text in
+///     guard typed == "*", location < text.count else { return nil }
+///     let index = text.index(text.startIndex, offsetBy: location)
+///     return text[index] == "*" ? 1 : nil
+/// }
+/// ```
+///
+public typealias TypeoverHandler = (
+  _ typed: Character,
+  _ location: Int,
+  _ text: String
+) -> Int?
+
 
 // MARK: -
 // MARK: Message info
@@ -191,6 +216,13 @@ final class CodeView: UITextView {
   /// Optional handler for custom auto-character behavior.
   /// Use this to implement language-specific auto-closing pairs (like `*` for markdown).
   public var autoCharacterHandler: AutoCharacterHandler?
+
+  /// Optional handler for custom typeover behavior.
+  /// Use this to customize which characters trigger typeover (cursor movement past existing character).
+  public var typeoverHandler: TypeoverHandler? {
+    get { codeStorageDelegate.typeoverHandler }
+    set { codeStorageDelegate.typeoverHandler = newValue }
+  }
 
   /// Hook to propagate message sets upwards in the view hierarchy.
   ///
@@ -686,6 +718,13 @@ final class CodeView: NSTextView {
   /// Optional handler for custom auto-character behavior.
   /// Use this to implement language-specific auto-closing pairs (like `*` for markdown).
   public var autoCharacterHandler: AutoCharacterHandler?
+
+  /// Optional handler for custom typeover behavior.
+  /// Use this to customize which characters trigger typeover (cursor movement past existing character).
+  public var typeoverHandler: TypeoverHandler? {
+    get { codeStorageDelegate.typeoverHandler }
+    set { codeStorageDelegate.typeoverHandler = newValue }
+  }
 
   /// Hook to propagate message sets upwards in the view hierarchy.
   ///

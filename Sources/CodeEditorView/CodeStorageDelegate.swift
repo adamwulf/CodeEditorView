@@ -200,6 +200,26 @@ class CodeStorageDelegate: NSObject, NSTextStorageDelegate {
   ///
   var tokenCompletionCharacters: Int = 0
 
+  /// A handler for custom typeover behavior.
+  ///
+  /// This callback is invoked before the built-in bracket typeover logic. It receives:
+  /// - `typed`: The character being typed
+  /// - `location`: The cursor location where the character would be inserted
+  /// - `text`: The current text content
+  ///
+  /// Return the number of characters to skip (typeover), or `nil` to fall through to built-in behavior.
+  ///
+  /// Example for markdown `*` typeover:
+  /// ```swift
+  /// delegate.typeoverHandler = { typed, location, text in
+  ///     guard typed == "*", location < text.count else { return nil }
+  ///     let index = text.index(text.startIndex, offsetBy: location)
+  ///     return text[index] == "*" ? 1 : nil
+  /// }
+  /// ```
+  ///
+  var typeoverHandler: ((_ typed: Character, _ location: Int, _ text: String) -> Int?)?
+
 
   // MARK: Initialisers
 
@@ -886,7 +906,15 @@ extension CodeStorageDelegate {
     // Only handle single character insertions
     guard text.count == 1, let char = text.first else { return nil }
 
-    // Check if it's a closing bracket that we handle
+    let string = codeStorage.string
+
+    // First, check custom typeover handler
+    if let handler = typeoverHandler,
+       let skip = handler(char, location, string) {
+      return skip
+    }
+
+    // Built-in typeover for closing brackets
     let closingBrackets: [(char: Character, enabled: Bool)] = [
       (")", language.supportsRoundBrackets),
       ("]", language.supportsSquareBrackets),
@@ -897,7 +925,6 @@ extension CodeStorageDelegate {
           bracket.enabled else { return nil }
 
     // Check bounds
-    let string = codeStorage.string
     guard location < string.utf16.count else { return nil }
 
     // Check if the character at cursor position matches

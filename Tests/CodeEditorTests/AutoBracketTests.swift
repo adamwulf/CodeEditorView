@@ -496,6 +496,89 @@ final class AutoBracketTests: XCTestCase {
     XCTAssertEqual(squareResult, 1, "Should typeover for enabled bracket types")
   }
 
+  // MARK: - Custom Typeover Handler Tests
+
+  func testCustomTypeoverHandler() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up a custom handler for markdown asterisk
+    delegate.typeoverHandler = { typed, location, text in
+      guard typed == "*", location < text.count else { return nil }
+      let index = text.index(text.startIndex, offsetBy: location)
+      return text[index] == "*" ? 1 : nil
+    }
+
+    // Set up text: "**bold**" with cursor before the second *
+    codeStorage.setAttributedString(NSAttributedString(string: "**bold**"))
+
+    // Should typeover when typing "*" at position 7 (before last "*")
+    let result = delegate.shouldTypeover(for: codeStorage, at: 7, inserting: "*")
+    XCTAssertEqual(result, 1, "Custom handler should return 1 for asterisk typeover")
+  }
+
+  func testCustomTypeoverHandlerTakesPrecedence() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up a custom handler that blocks ALL typeover
+    delegate.typeoverHandler = { typed, location, text in
+      // Return nil for everything - this prevents default bracket typeover
+      return nil
+    }
+
+    // Set up text: "func()"
+    codeStorage.setAttributedString(NSAttributedString(string: "func()"))
+
+    // Should still typeover ")" because handler returns nil (falls through to built-in)
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: ")")
+    XCTAssertEqual(result, 1, "Built-in should handle when custom handler returns nil")
+  }
+
+  func testCustomTypeoverHandlerCanOverrideBuiltIn() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up a custom handler that returns 0 to block typeover
+    // (returning 0 means "skip 0 characters" which effectively does nothing useful,
+    // but since it's non-nil, it takes precedence over built-in)
+    var handlerCalled = false
+    delegate.typeoverHandler = { typed, location, text in
+      if typed == ")" {
+        handlerCalled = true
+        return 2  // Custom behavior: skip 2 characters instead of 1
+      }
+      return nil
+    }
+
+    // Set up text: "func())"
+    codeStorage.setAttributedString(NSAttributedString(string: "func())"))
+
+    // Custom handler should take precedence and return 2
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: ")")
+    XCTAssertTrue(handlerCalled, "Custom handler should be called")
+    XCTAssertEqual(result, 2, "Custom handler should override built-in with custom skip count")
+  }
+
+  func testCustomTypeoverHandlerForNonBracketCharacters() throws {
+    let (codeStorage, delegate) = makeCodeStorage()
+
+    // Set up a handler for backtick (not a built-in bracket)
+    delegate.typeoverHandler = { typed, location, text in
+      guard typed == "`", location < text.count else { return nil }
+      let index = text.index(text.startIndex, offsetBy: location)
+      return text[index] == "`" ? 1 : nil
+    }
+
+    // Set up text: "`code`"
+    codeStorage.setAttributedString(NSAttributedString(string: "`code`"))
+
+    // Should typeover when typing "`" at position 5 (before last "`")
+    let result = delegate.shouldTypeover(for: codeStorage, at: 5, inserting: "`")
+    XCTAssertEqual(result, 1, "Custom handler should work for non-bracket characters")
+
+    // Should NOT typeover when the character doesn't match
+    let noMatch = delegate.shouldTypeover(for: codeStorage, at: 1, inserting: "`")
+    XCTAssertNil(noMatch, "Should return nil when character doesn't match")
+  }
+
   static var allTests = [
     // Auto-insertion tests
     ("testRoundBracketAutoInsertion", testRoundBracketAutoInsertion),
@@ -530,5 +613,10 @@ final class AutoBracketTests: XCTestCase {
     ("testNoTypeoverForOpeningBracket", testNoTypeoverForOpeningBracket),
     ("testNoTypeoverForMultipleCharacters", testNoTypeoverForMultipleCharacters),
     ("testNoTypeoverWhenBracketsDisabled", testNoTypeoverWhenBracketsDisabled),
+    // Custom typeover handler tests
+    ("testCustomTypeoverHandler", testCustomTypeoverHandler),
+    ("testCustomTypeoverHandlerTakesPrecedence", testCustomTypeoverHandlerTakesPrecedence),
+    ("testCustomTypeoverHandlerCanOverrideBuiltIn", testCustomTypeoverHandlerCanOverrideBuiltIn),
+    ("testCustomTypeoverHandlerForNonBracketCharacters", testCustomTypeoverHandlerForNonBracketCharacters),
   ]
 }
