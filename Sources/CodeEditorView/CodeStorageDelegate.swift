@@ -352,8 +352,20 @@ class CodeStorageDelegate: NSObject, NSTextStorageDelegate {
         // Insert closing bracket after the newline + indentation, with an extra newline before it
         let closingLexeme = pendingToken.token == .curlyBracketOpen ? "}" : (language.nestedComment?.close ?? "")
         if !closingLexeme.isEmpty {
+          // Get the indentation of the line where the opening bracket was typed
+          let openingBracketLine = lineMap.lineOf(index: pendingToken.range.location) ?? 0
+          let openingLineIndent: String
+          if let lineInfo = lineMap.lookup(line: openingBracketLine) {
+            let lineString = (textStorage.string as NSString).substring(with: lineInfo.range)
+            // Extract leading whitespace
+            let leadingWhitespace = lineString.prefix(while: { $0 == " " || $0 == "\t" })
+            openingLineIndent = String(leadingWhitespace)
+          } else {
+            openingLineIndent = ""
+          }
+
           let insertLocation = editedRange.location + editedRange.length
-          let completingString = "\n" + closingLexeme
+          let completingString = "\n" + openingLineIndent + closingLexeme
           codeStorage.replaceCharacters(in: NSRange(location: insertLocation, length: 0), with: completingString)
 
           // Update line map with completion characters
