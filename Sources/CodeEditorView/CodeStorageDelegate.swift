@@ -338,6 +338,41 @@ class CodeStorageDelegate: NSObject, NSTextStorageDelegate {
         highlightingLines += extraHighlighting.lines
 
       }
+    } else if let pendingToken = lastTypedToken,
+              pendingToken.token == .curlyBracketOpen || pendingToken.token == .nestedCommentOpen,
+              editedRange.location == pendingToken.range.max,
+              delta > 0
+    {
+      // Handle delayed completion for curly brackets when auto-indentation adds multiple characters.
+      // This happens when pressing Enter after `{` - the system inserts newline + indentation.
+      let editedString = (textStorage.string as NSString).substring(with: editedRange)
+
+      // Check if the edit contains a newline (indicating Enter was pressed)
+      if editedString.contains(where: { CharacterSet.newlines.contains(Unicode.Scalar(String($0))!) }) {
+        // Insert closing bracket after the newline + indentation, with an extra newline before it
+        let closingLexeme = pendingToken.token == .curlyBracketOpen ? "}" : (language.nestedComment?.close ?? "")
+        if !closingLexeme.isEmpty {
+          let insertLocation = editedRange.location + editedRange.length
+          let completingString = "\n" + closingLexeme
+          codeStorage.replaceCharacters(in: NSRange(location: insertLocation, length: 0), with: completingString)
+
+          // Update line map with completion characters
+          lineMap.updateAfterEditing(string: textStorage.string,
+                                     range: NSRange(location: insertLocation, length: completingString.utf16.count),
+                                     changeInLength: completingString.utf16.count)
+
+          // Adjust the editing range and delta
+          editedRange.length += completingString.utf16.count
+          delta += completingString.utf16.count
+          tokenCompletionCharacters = completingString.utf16.count
+
+          // Re-tokenise with the completion characters included
+          let extraHighlighting = tokenise(range: editedRange, in: textStorage)
+          highlightingRange = highlightingRange.union(extraHighlighting.affectedRange)
+          highlightingLines += extraHighlighting.lines
+        }
+      }
+      lastTypedToken = nil
     }
 
     // The range within which highlighting has to be re-rendered.
