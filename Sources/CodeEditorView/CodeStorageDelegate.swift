@@ -816,6 +816,9 @@ extension CodeStorageDelegate {
 
     let currentTypedToken = codeStorage.tokenOnly(at: index)
 
+    // DEBUG: Log token completion state
+    print("[tokenCompletion] index=\(index), currentToken=\(String(describing: currentTypedToken?.token)), currentRange=\(String(describing: currentTypedToken?.range)), lastTypedToken=\(String(describing: lastTypedToken?.token)), lastRange=\(String(describing: lastTypedToken?.range))")
+
     // MARK: Immediate insertion for round and square brackets
     // When typing `(` or `[`, immediately insert the matching closing bracket.
     // Note: `{` uses delayed insertion (handled below) to preserve special newline behavior.
@@ -846,10 +849,21 @@ extension CodeStorageDelegate {
     let previousTypedToken = lastTypedToken
     lastTypedToken = currentTypedToken
 
+    // DEBUG: Log delayed completion check
+    if let prev = previousTypedToken {
+      print("[tokenCompletion] DELAYED CHECK: prevToken=\(prev.token), prevRange.max=\(prev.range.max), index=\(index), match=\(prev.range.max == index)")
+    } else {
+      print("[tokenCompletion] DELAYED CHECK: no previousTypedToken")
+    }
+
     guard let previousToken = previousTypedToken,
           previousToken.range.max == index,
           let closingLexeme = matchingLexemeForOpeningBracket(previousToken.token)
-    else { return 0 }
+    else {
+      print("[tokenCompletion] DELAYED: guard failed, returning 0")
+      return 0
+    }
+    print("[tokenCompletion] DELAYED: guard passed! Will insert '\(closingLexeme)'")
 
     // Check for token overlap (e.g., "/" becoming part of "/*")
     // If the current token overlaps with the previous, don't complete yet.

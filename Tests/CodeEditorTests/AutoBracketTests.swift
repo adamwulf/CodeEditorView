@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import RegexBuilder
 @testable import CodeEditorView
 @testable import LanguageSupport
 
@@ -383,6 +384,199 @@ final class AutoBracketTests: XCTestCase {
     XCTAssertEqual(codeStorage.string, "([{")
     codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: " ")
     XCTAssertEqual(codeStorage.string, "([{ ")
+  }
+
+  func testCurlyBracketAutoInsertionWithNoCommentConfig() throws {
+    // Test a config similar to Markdown: brackets enabled but no comments
+    // This ensures curly bracket auto-insertion works without singleLineComment
+    let config = LanguageConfiguration(
+      name: "MarkdownLike",
+      supportsSquareBrackets: true,
+      supportsCurlyBrackets: true,
+      supportsRoundBrackets: true,
+      stringRegex: nil,
+      characterRegex: nil,
+      numberRegex: nil,
+      singleLineComment: nil,  // No single line comment (like markdown)
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: []
+    )
+    let (codeStorage, _) = makeCodeStorage(with: config)
+
+    // Start with "if "
+    codeStorage.setAttributedString(NSAttributedString(string: "if "))
+    XCTAssertEqual(codeStorage.string, "if ")
+
+    // Type "{" at position 3 - delayed, so no "}" yet
+    codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "{")
+    XCTAssertEqual(codeStorage.string, "if {")
+
+    // Type " " at position 4 - should trigger auto-insertion of "}"
+    codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: " ")
+    XCTAssertEqual(codeStorage.string, "if { }")
+  }
+
+  func testCurlyBracketAutoInsertionWithNewlineNoCommentConfig() throws {
+    // Test curly bracket with newline in a no-comment config
+    let config = LanguageConfiguration(
+      name: "MarkdownLike",
+      supportsSquareBrackets: true,
+      supportsCurlyBrackets: true,
+      supportsRoundBrackets: true,
+      stringRegex: nil,
+      characterRegex: nil,
+      numberRegex: nil,
+      singleLineComment: nil,
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: []
+    )
+    let (codeStorage, _) = makeCodeStorage(with: config)
+
+    // Start with "if "
+    codeStorage.setAttributedString(NSAttributedString(string: "if "))
+
+    // Type "{" at position 3
+    codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "{")
+    XCTAssertEqual(codeStorage.string, "if {")
+
+    // Type newline at position 4 - should auto-insert newline + "}"
+    codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "\n")
+    XCTAssertEqual(codeStorage.string, "if {\n\n}")
+  }
+
+  func testCurlyBracketAutoInsertionWithStringRegexConfig() throws {
+    // Test with stringRegex set (like markdown's inline code `...`)
+    let inlineCodeRegex: Regex<Substring> = Regex {
+      "`"
+      OneOrMore {
+        CharacterClass(.anyOf("`\n").inverted)
+      }
+      "`"
+    }
+    let config = LanguageConfiguration(
+      name: "MarkdownLikeWithCode",
+      supportsSquareBrackets: true,
+      supportsCurlyBrackets: true,
+      supportsRoundBrackets: true,
+      stringRegex: inlineCodeRegex,
+      characterRegex: nil,
+      numberRegex: nil,
+      singleLineComment: nil,
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: ["##", "**", "~~"]
+    )
+    let (codeStorage, _) = makeCodeStorage(with: config)
+
+    // Start with "if "
+    codeStorage.setAttributedString(NSAttributedString(string: "if "))
+    XCTAssertEqual(codeStorage.string, "if ")
+
+    // Type "{" at position 3 - delayed
+    codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "{")
+    XCTAssertEqual(codeStorage.string, "if {")
+
+    // Type " " at position 4 - should trigger auto-insertion of "}"
+    codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: " ")
+    XCTAssertEqual(codeStorage.string, "if { }")
+  }
+
+  func testCurlyBracketAutoInsertionWithStringRegexNewlineConfig() throws {
+    // Test with stringRegex and newline
+    let inlineCodeRegex: Regex<Substring> = Regex {
+      "`"
+      OneOrMore {
+        CharacterClass(.anyOf("`\n").inverted)
+      }
+      "`"
+    }
+    let config = LanguageConfiguration(
+      name: "MarkdownLikeWithCode",
+      supportsSquareBrackets: true,
+      supportsCurlyBrackets: true,
+      supportsRoundBrackets: true,
+      stringRegex: inlineCodeRegex,
+      characterRegex: nil,
+      numberRegex: nil,
+      singleLineComment: nil,
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: ["##", "**", "~~"]
+    )
+    let (codeStorage, _) = makeCodeStorage(with: config)
+
+    // Start with "if "
+    codeStorage.setAttributedString(NSAttributedString(string: "if "))
+
+    // Type "{" at position 3
+    codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "{")
+    XCTAssertEqual(codeStorage.string, "if {")
+
+    // Type newline at position 4 - should auto-insert newline + "}"
+    codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "\n")
+    XCTAssertEqual(codeStorage.string, "if {\n\n}")
+  }
+
+  func testCurlyBracketAutoInsertionExactMarkdownConfig() throws {
+    // Exact replication of MathTex's markdown configuration
+    let inlineMathRegex: Regex<Substring> = Regex {
+      "$"
+      NegativeLookahead { "$" }
+      OneOrMore(.reluctant) {
+        CharacterClass(.anyOf("$\n").inverted)
+      }
+      "$"
+      NegativeLookahead { "$" }
+    }
+    let inlineCodeRegex: Regex<Substring> = Regex {
+      "`"
+      NegativeLookahead { "`" }
+      OneOrMore(.reluctant) {
+        CharacterClass(.anyOf("`\n").inverted)
+      }
+      "`"
+    }
+    let markdownOperators = ["$$$", "$$", "######", "#####", "####", "###", "##", "#",
+                             "***", "**", "*", "___", "__", "_", "---", ">", "~~", "```"]
+
+    let config = LanguageConfiguration(
+      name: "Markdown",
+      supportsSquareBrackets: true,
+      supportsCurlyBrackets: true,
+      supportsRoundBrackets: true,
+      stringRegex: inlineMathRegex,
+      characterRegex: inlineCodeRegex,
+      numberRegex: nil,
+      singleLineComment: nil,
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: markdownOperators
+    )
+    let (codeStorage, _) = makeCodeStorage(with: config)
+
+    // Start with empty
+    codeStorage.setAttributedString(NSAttributedString(string: ""))
+    XCTAssertEqual(codeStorage.string, "")
+
+    // Type "{" at position 0 - delayed
+    codeStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: "{")
+    XCTAssertEqual(codeStorage.string, "{")
+
+    // Type newline at position 1 - should trigger auto-insertion of newline + "}"
+    codeStorage.replaceCharacters(in: NSRange(location: 1, length: 0), with: "\n")
+    XCTAssertEqual(codeStorage.string, "{\n\n}")
   }
 
   // MARK: - Typeover Tests
