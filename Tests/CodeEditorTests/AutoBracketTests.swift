@@ -21,6 +21,14 @@ final class AutoBracketTests: XCTestCase {
     return (codeStorage, codeStorageDelegate)
   }
 
+  /// Creates a CodeStorage with a custom LanguageConfiguration.
+  private func makeCodeStorage(with config: LanguageConfiguration) -> (CodeStorage, CodeStorageDelegate) {
+    let codeStorageDelegate = CodeStorageDelegate(with: config, setText: { _ in })
+    let codeStorage = CodeStorage(theme: .defaultLight)
+    codeStorage.delegate = codeStorageDelegate
+    return (codeStorage, codeStorageDelegate)
+  }
+
   // MARK: - Auto-Insertion Tests
 
   func testRoundBracketAutoInsertion() throws {
@@ -265,6 +273,118 @@ final class AutoBracketTests: XCTestCase {
     XCTAssertEqual(codeStorage.string, "if {()}")
   }
 
+  // MARK: - Configuration Tests
+
+  func testNoAutoInsertionWhenRoundBracketsDisabled() throws {
+    // Create a config with supportsRoundBrackets: false
+    let config = LanguageConfiguration(
+      name: "NoParens",
+      supportsSquareBrackets: true,
+      supportsCurlyBrackets: true,
+      supportsRoundBrackets: false,
+      stringRegex: nil,
+      characterRegex: nil,
+      numberRegex: nil,
+      singleLineComment: "//",
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: []
+    )
+    let (codeStorage, _) = makeCodeStorage(with: config)
+
+    // Start with "func"
+    codeStorage.setAttributedString(NSAttributedString(string: "func"))
+    XCTAssertEqual(codeStorage.string, "func")
+
+    // Type "(" at position 4 - should NOT auto-insert ")" since round brackets are disabled
+    codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: "(")
+    XCTAssertEqual(codeStorage.string, "func(")
+  }
+
+  func testNoAutoInsertionWhenSquareBracketsDisabled() throws {
+    // Create a config with supportsSquareBrackets: false
+    let config = LanguageConfiguration(
+      name: "NoSquare",
+      supportsSquareBrackets: false,
+      supportsCurlyBrackets: true,
+      supportsRoundBrackets: true,
+      stringRegex: nil,
+      characterRegex: nil,
+      numberRegex: nil,
+      singleLineComment: "//",
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: []
+    )
+    let (codeStorage, _) = makeCodeStorage(with: config)
+
+    // Start with "arr"
+    codeStorage.setAttributedString(NSAttributedString(string: "arr"))
+    XCTAssertEqual(codeStorage.string, "arr")
+
+    // Type "[" at position 3 - should NOT auto-insert "]" since square brackets are disabled
+    codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "[")
+    XCTAssertEqual(codeStorage.string, "arr[")
+  }
+
+  func testNoAutoInsertionWhenCurlyBracketsDisabled() throws {
+    // Create a config with supportsCurlyBrackets: false
+    let config = LanguageConfiguration(
+      name: "NoCurly",
+      supportsSquareBrackets: true,
+      supportsCurlyBrackets: false,
+      supportsRoundBrackets: true,
+      stringRegex: nil,
+      characterRegex: nil,
+      numberRegex: nil,
+      singleLineComment: "//",
+      nestedComment: nil,
+      identifierRegex: nil,
+      operatorRegex: nil,
+      reservedIdentifiers: [],
+      reservedOperators: []
+    )
+    let (codeStorage, _) = makeCodeStorage(with: config)
+
+    // Start with "if "
+    codeStorage.setAttributedString(NSAttributedString(string: "if "))
+    XCTAssertEqual(codeStorage.string, "if ")
+
+    // Type "{" at position 3 - should NOT recognize as bracket
+    codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: "{")
+    XCTAssertEqual(codeStorage.string, "if {")
+
+    // Type " " at position 4 - should NOT auto-insert "}" since curly brackets are disabled
+    codeStorage.replaceCharacters(in: NSRange(location: 4, length: 0), with: " ")
+    XCTAssertEqual(codeStorage.string, "if { ")
+  }
+
+  func testNoAutoInsertionWithNoneConfiguration() throws {
+    // LanguageConfiguration.none has all brackets disabled
+    let (codeStorage, _) = makeCodeStorage(with: .none)
+
+    // Start empty
+    codeStorage.setAttributedString(NSAttributedString(string: ""))
+
+    // Type "(" - should NOT auto-insert
+    codeStorage.replaceCharacters(in: NSRange(location: 0, length: 0), with: "(")
+    XCTAssertEqual(codeStorage.string, "(")
+
+    // Type "[" - should NOT auto-insert
+    codeStorage.replaceCharacters(in: NSRange(location: 1, length: 0), with: "[")
+    XCTAssertEqual(codeStorage.string, "([")
+
+    // Type "{" then " " - should NOT auto-insert
+    codeStorage.replaceCharacters(in: NSRange(location: 2, length: 0), with: "{")
+    XCTAssertEqual(codeStorage.string, "([{")
+    codeStorage.replaceCharacters(in: NSRange(location: 3, length: 0), with: " ")
+    XCTAssertEqual(codeStorage.string, "([{ ")
+  }
+
   static var allTests = [
     // Auto-insertion tests
     ("testRoundBracketAutoInsertion", testRoundBracketAutoInsertion),
@@ -285,5 +405,10 @@ final class AutoBracketTests: XCTestCase {
     ("testAutoInsertionAtStartOfDocument", testAutoInsertionAtStartOfDocument),
     ("testAutoInsertionWithMultipleBracketTypes", testAutoInsertionWithMultipleBracketTypes),
     ("testCurlyBracketWithImmediateBracketInside", testCurlyBracketWithImmediateBracketInside),
+    // Configuration tests
+    ("testNoAutoInsertionWhenRoundBracketsDisabled", testNoAutoInsertionWhenRoundBracketsDisabled),
+    ("testNoAutoInsertionWhenSquareBracketsDisabled", testNoAutoInsertionWhenSquareBracketsDisabled),
+    ("testNoAutoInsertionWhenCurlyBracketsDisabled", testNoAutoInsertionWhenCurlyBracketsDisabled),
+    ("testNoAutoInsertionWithNoneConfiguration", testNoAutoInsertionWithNoneConfiguration),
   ]
 }
