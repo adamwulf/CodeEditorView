@@ -312,6 +312,10 @@ class CodeStorageDelegate: NSObject, NSTextStorageDelegate {
     // If a single character was added, process token-level completion steps (and remember that we are processing a
     // one character addition).
     processingOneCharacterAddition = delta == 1 && editedRange.length == 1
+
+    // DEBUG: Log every edit to see why tokenCompletion might not be called
+    print("[willProcessEditing] delta=\(delta), editedRange=\(editedRange), processingOneCharacterAddition=\(processingOneCharacterAddition)")
+
     var editedRange = editedRange
     var delta       = delta
     if processingOneCharacterAddition {
@@ -334,6 +338,53 @@ class CodeStorageDelegate: NSObject, NSTextStorageDelegate {
         highlightingLines += extraHighlighting.lines
 
       }
+    } else if let pendingToken = lastTypedToken,
+              pendingToken.token == .curlyBracketOpen || pendingToken.token == .nestedCommentOpen,
+              editedRange.location == pendingToken.range.max,
+              delta > 0
+    {
+      // Handle delayed completion for curly brackets when auto-indentation adds multiple characters.
+      // This happens when pressing Enter after `{` - the system inserts newline + indentation.
+      let editedString = (textStorage.string as NSString).substring(with: editedRange)
+
+      // Check if the edit contains a newline (indicating Enter was pressed)
+      if editedString.contains(where: { CharacterSet.newlines.contains(Unicode.Scalar(String($0))!) }) {
+        // Insert closing bracket after the newline + indentation, with an extra newline before it
+        let closingLexeme = pendingToken.token == .curlyBracketOpen ? "}" : (language.nestedComment?.close ?? "")
+        if !closingLexeme.isEmpty {
+          // Get the indentation of the line where the opening bracket was typed
+          let openingBracketLine = lineMap.lineOf(index: pendingToken.range.location) ?? 0
+          let openingLineIndent: String
+          if let lineInfo = lineMap.lookup(line: openingBracketLine) {
+            let lineString = (textStorage.string as NSString).substring(with: lineInfo.range)
+            // Extract leading whitespace
+            let leadingWhitespace = lineString.prefix(while: { $0 == " " || $0 == "\t" })
+            openingLineIndent = String(leadingWhitespace)
+          } else {
+            openingLineIndent = ""
+          }
+
+          let insertLocation = editedRange.location + editedRange.length
+          let completingString = "\n" + openingLineIndent + closingLexeme
+          codeStorage.replaceCharacters(in: NSRange(location: insertLocation, length: 0), with: completingString)
+
+          // Update line map with completion characters
+          lineMap.updateAfterEditing(string: textStorage.string,
+                                     range: NSRange(location: insertLocation, length: completingString.utf16.count),
+                                     changeInLength: completingString.utf16.count)
+
+          // Adjust the editing range and delta
+          editedRange.length += completingString.utf16.count
+          delta += completingString.utf16.count
+          tokenCompletionCharacters = completingString.utf16.count
+
+          // Re-tokenise with the completion characters included
+          let extraHighlighting = tokenise(range: editedRange, in: textStorage)
+          highlightingRange = highlightingRange.union(extraHighlighting.affectedRange)
+          highlightingLines += extraHighlighting.lines
+        }
+      }
+      lastTypedToken = nil
     }
 
     // The range within which highlighting has to be re-rendered.
@@ -816,6 +867,9 @@ extension CodeStorageDelegate {
 
     let currentTypedToken = codeStorage.tokenOnly(at: index)
 
+    // DEBUG: Log token completion state
+    print("[tokenCompletion] index=\(index), currentToken=\(String(describing: currentTypedToken?.token)), currentRange=\(String(describing: currentTypedToken?.range)), lastTypedToken=\(String(describing: lastTypedToken?.token)), lastRange=\(String(describing: lastTypedToken?.range))")
+
     // MARK: Immediate insertion for round and square brackets
     // When typing `(` or `[`, immediately insert the matching closing bracket.
     // Note: `{` uses delayed insertion (handled below) to preserve special newline behavior.
@@ -846,10 +900,21 @@ extension CodeStorageDelegate {
     let previousTypedToken = lastTypedToken
     lastTypedToken = currentTypedToken
 
+    // DEBUG: Log delayed completion check
+    if let prev = previousTypedToken {
+      print("[tokenCompletion] DELAYED CHECK: prevToken=\(prev.token), prevRange.max=\(prev.range.max), index=\(index), match=\(prev.range.max == index)")
+    } else {
+      print("[tokenCompletion] DELAYED CHECK: no previousTypedToken")
+    }
+
     guard let previousToken = previousTypedToken,
           previousToken.range.max == index,
           let closingLexeme = matchingLexemeForOpeningBracket(previousToken.token)
-    else { return 0 }
+    else {
+      print("[tokenCompletion] DELAYED: guard failed, returning 0")
+      return 0
+    }
+    print("[tokenCompletion] DELAYED: guard passed! Will insert '\(closingLexeme)'")
 
     // Check for token overlap (e.g., "/" becoming part of "/*")
     // If the current token overlaps with the previous, don't complete yet.
