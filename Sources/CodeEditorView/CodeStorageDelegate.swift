@@ -312,6 +312,10 @@ class CodeStorageDelegate: NSObject, NSTextStorageDelegate {
     // If a single character was added, process token-level completion steps (and remember that we are processing a
     // one character addition).
     processingOneCharacterAddition = delta == 1 && editedRange.length == 1
+
+    // DEBUG: Log every edit to see why tokenCompletion might not be called
+    print("[willProcessEditing] delta=\(delta), editedRange=\(editedRange), processingOneCharacterAddition=\(processingOneCharacterAddition)")
+
     var editedRange = editedRange
     var delta       = delta
     if processingOneCharacterAddition {
