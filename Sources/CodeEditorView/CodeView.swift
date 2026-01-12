@@ -564,7 +564,8 @@ final class CodeViewDelegate: NSObject, UITextViewDelegate {
     }
 
     // Default typeover behavior for closing brackets - delegate to CodeStorageDelegate
-    if let skip = codeView.codeStorageDelegate.shouldTypeover(for: codeView.codeStorage, at: cursorLocation, inserting: text) {
+    if let codeStorage = codeView.optCodeStorage,
+       let skip = codeView.codeStorageDelegate.shouldTypeover(for: codeStorage, at: cursorLocation, inserting: text) {
       // Move cursor forward instead of inserting
       if let newPosition = textView.position(from: textView.beginningOfDocument, offset: cursorLocation + skip) {
         textView.selectedTextRange = textView.textRange(from: newPosition, to: newPosition)
